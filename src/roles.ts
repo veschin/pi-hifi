@@ -40,6 +40,10 @@ export class RoleResolver {
   private readonly config: ApodexConfig;
   private readonly registry: ModelRegistryLike;
   private readonly sessionModel: Model<Api> | undefined;
+  // Resolution (including a degraded fallback) is cached for the lifetime of
+  // ONE pipeline run: a run lasts minutes and must behave consistently across
+  // its sub-calls; recovery to a newly-available pinned model applies from the
+  // next run, which constructs a fresh resolver.
   private readonly cache = new Map<RoleName, ResolvedRole>();
 
   constructor(opts: RoleResolverOptions) {

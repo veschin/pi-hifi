@@ -84,6 +84,7 @@ export async function runNodeScript(req: ExecRequest): Promise<ExecEvidence> {
         env: { NODE_ENV: "test" },
       });
 
+      let sigkillTimer: ReturnType<typeof setTimeout> | undefined;
       const killTimer = setTimeout(() => {
         timedOut = true;
         try {
@@ -91,13 +92,14 @@ export async function runNodeScript(req: ExecRequest): Promise<ExecEvidence> {
         } catch {
           /* ignore */
         }
-        setTimeout(() => {
+        sigkillTimer = setTimeout(() => {
           try {
             child.kill("SIGKILL");
           } catch {
             /* ignore */
           }
-        }, 2_000).unref();
+        }, 2_000);
+        sigkillTimer.unref();
       }, req.timeoutMs);
 
       child.stdout.on("data", (chunk: Buffer) => {
@@ -111,6 +113,7 @@ export async function runNodeScript(req: ExecRequest): Promise<ExecEvidence> {
         if (settled) return;
         settled = true;
         clearTimeout(killTimer);
+        if (sigkillTimer) clearTimeout(sigkillTimer);
         resolve(evidence);
       };
 

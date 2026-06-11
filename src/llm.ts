@@ -35,8 +35,7 @@ function extractText(message: AssistantMessage): string {
     .trim();
 }
 
-function usageOf(message: AssistantMessage | null): UsageTotals {
-  if (!message) return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, costUsd: 0 };
+function usageOf(message: AssistantMessage): UsageTotals {
   return {
     input: message.usage.input,
     output: message.usage.output,
@@ -108,6 +107,17 @@ export class SubCallClient {
     let lastError = "";
     let response: AssistantMessage | null = null;
     let attempts = 0;
+    // Budget accounting must cover EVERY attempt, not just the final one -
+    // a retried call costs real tokens on each try.
+    const cumulativeUsage: UsageTotals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, costUsd: 0 };
+    const accumulate = (message: AssistantMessage) => {
+      const u = usageOf(message);
+      cumulativeUsage.input += u.input;
+      cumulativeUsage.output += u.output;
+      cumulativeUsage.cacheRead += u.cacheRead;
+      cumulativeUsage.cacheWrite += u.cacheWrite;
+      cumulativeUsage.costUsd += u.costUsd;
+    };
 
     const maxAttempts = this.opts.maxRetries + 1;
     for (attempts = 1; attempts <= maxAttempts; attempts++) {
@@ -132,6 +142,7 @@ export class SubCallClient {
           },
           { ...baseOptions, signal },
         );
+        accumulate(message);
         // completeSimple reports failures in-band via stopReason/errorMessage.
         if (message.stopReason === "aborted") {
           response = message;
@@ -166,7 +177,7 @@ export class SubCallClient {
       }
     }
 
-    const usage = usageOf(response);
+    const usage = cumulativeUsage;
     this.opts.budget.record(usage);
 
     const text = response && lastError === "" ? extractText(response) : "";

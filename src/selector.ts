@@ -88,45 +88,44 @@ async function generateCandidates(opts: SelectorOptions): Promise<Candidate[]> {
   const system = generatorSystem(opts.mode);
   const user = generatorUser(opts.task);
 
-  const results = await Promise.all(
+  // allSettled (not all): every lane is awaited before inspection, so a
+  // BudgetExhaustedError in one lane cannot leave dangling rejected promises
+  // behind (which would crash under --unhandled-rejections=throw).
+  const settled = await Promise.allSettled(
     Array.from({ length: opts.candidates }, (_, index) =>
-      opts.client
-        .call({
-          role: "generator",
-          label: `selector.candidate.${index}`,
-          systemPrompt: system,
-          userText: user,
-          temperature: 0.8,
-        })
-        .then(
-          (outcome) => ({ index, outcome }),
-          (err: unknown) => {
-            // BudgetExhaustedError must stop the whole stage, not vanish in Promise.all.
-            if (err instanceof BudgetExhaustedError) throw err;
-            return {
-              index,
-              outcome: {
-                ok: false as const,
-                text: "",
-                record: null,
-                error: err instanceof Error ? err.message : String(err),
-              },
-            };
-          },
-        ),
+      opts.client.call({
+        role: "generator",
+        label: `selector.candidate.${index}`,
+        systemPrompt: system,
+        userText: user,
+        temperature: 0.8,
+      }),
     ),
   );
 
-  const candidates: Candidate[] = [];
-  for (const { index, outcome } of results) {
-    const candidate: Candidate = {
+  const budgetStop = settled.find(
+    (r): r is PromiseRejectedResult => r.status === "rejected" && r.reason instanceof BudgetExhaustedError,
+  );
+  if (budgetStop) throw budgetStop.reason;
+
+  const candidates: Candidate[] = settled.map((result, index) => {
+    if (result.status === "fulfilled") {
+      const outcome = result.value;
+      const candidate: Candidate = {
+        index,
+        text: outcome.ok ? outcome.text : "",
+        execEvidence: null,
+      };
+      if (!outcome.ok) candidate.generationError = outcome.error ?? "generation failed";
+      return candidate;
+    }
+    return {
       index,
-      text: outcome.ok ? outcome.text : "",
+      text: "",
       execEvidence: null,
+      generationError: result.reason instanceof Error ? result.reason.message : String(result.reason),
     };
-    if (!outcome.ok) candidate.generationError = outcome.error ?? "generation failed";
-    candidates.push(candidate);
-  }
+  });
   return candidates;
 }
 
