@@ -5,8 +5,12 @@
 // then both answers are scored by the same programmatic check. Prints a summary
 // table and persists JSON results.
 //
+// Baseline runs BASELINE_SAMPLES times (single-pass failure is a frequency,
+// not a single draw); the pipeline runs once (it is the expensive arm).
+//
 // Usage:
-//   npx tsx eval/run-eval.ts                 # full suite (9 tasks)
+//   npx tsx eval/run-eval.ts                 # full suite (9 tasks), pro engine
+//   npx tsx eval/run-eval.ts --engine both   # pro + flash engines, two tables
 //   npx tsx eval/run-eval.ts --smoke         # 1 task per bucket, lighter knobs
 //   npx tsx eval/run-eval.ts --only retry    # filter by id substring
 //   npx tsx eval/run-eval.ts --rounds 3 --candidates 3 --concurrency 2
@@ -25,7 +29,10 @@ import { createStandaloneRegistry } from "./standalone.ts";
 import { codeTasks } from "./tasks/code.ts";
 import { designTasks } from "./tasks/design.ts";
 import { incidentTasks } from "./tasks/incident.ts";
-import type { ArmResult, Bucket, EvalTask, TaskResult } from "./types.ts";
+import type { ArmResult, Bucket, Engine, EvalTask, TaskResult } from "./types.ts";
+
+/** Single-pass failure is a frequency; sample the cheap arm several times. */
+const BASELINE_SAMPLES = 3;
 
 interface CliArgs {
   smoke: boolean;
@@ -33,10 +40,18 @@ interface CliArgs {
   rounds: number | null;
   candidates: number | null;
   concurrency: number;
+  engines: Engine[];
 }
 
 function parseArgs(argv: string[]): CliArgs {
-  const args: CliArgs = { smoke: false, only: null, rounds: null, candidates: null, concurrency: 2 };
+  const args: CliArgs = {
+    smoke: false,
+    only: null,
+    rounds: null,
+    candidates: null,
+    concurrency: 2,
+    engines: ["pro"],
+  };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--smoke") args.smoke = true;
@@ -44,7 +59,15 @@ function parseArgs(argv: string[]): CliArgs {
     else if (arg === "--rounds") args.rounds = Number(argv[++i]);
     else if (arg === "--candidates") args.candidates = Number(argv[++i]);
     else if (arg === "--concurrency") args.concurrency = Number(argv[++i]);
-    else {
+    else if (arg === "--engine") {
+      const value = argv[++i];
+      if (value === "pro" || value === "flash") args.engines = [value];
+      else if (value === "both") args.engines = ["pro", "flash"];
+      else {
+        console.error(`--engine must be pro | flash | both, got ${value}`);
+        process.exit(2);
+      }
+    } else {
       console.error(`unknown argument: ${arg}`);
       process.exit(2);
     }
@@ -67,23 +90,35 @@ function parseArgs(argv: string[]): CliArgs {
   return args;
 }
 
-const EVAL_ENV: NodeJS.ProcessEnv = {
-  ...process.env,
-  // The eval pins the same engine for both arms regardless of ambient config.
-  APODEX_GENERATOR: "deepseek/deepseek-v4-pro",
-  APODEX_GRADER: "deepseek/deepseek-v4-pro",
-  APODEX_VERIFIER: "deepseek/deepseek-v4-pro",
-  APODEX_WORKER: "deepseek/deepseek-v4-flash",
-};
+// The eval pins the same engine for both arms regardless of ambient config.
+// "pro" = the strong engine in heavy roles; "flash" = the weak engine in heavy
+// roles (where single-pass fails more often and verification has headroom -
+// the Apodex paper's own GVR results show the largest gains on low-base tasks).
+// The worker role is always flash: it runs judges/auditors/checkers, not
+// generation, and is identical across arms.
+function engineEnv(engine: Engine): NodeJS.ProcessEnv {
+  const heavy = engine === "pro" ? "deepseek/deepseek-v4-pro" : "deepseek/deepseek-v4-flash";
+  return {
+    ...process.env,
+    APODEX_GENERATOR: heavy,
+    APODEX_GRADER: heavy,
+    APODEX_VERIFIER: heavy,
+    APODEX_WORKER: "deepseek/deepseek-v4-flash",
+  };
+}
 
 function bucketToMode(bucket: Bucket): TaskMode {
   return bucket;
 }
 
-function evalConfig(args: CliArgs, runsDir: string): { config: ApodexConfig; warnings: string[] } {
+function evalConfig(
+  args: CliArgs,
+  engine: Engine,
+  runsDir: string,
+): { config: ApodexConfig; warnings: string[] } {
   const { config, warnings } = loadConfig({
     cwd: process.cwd(),
-    env: EVAL_ENV,
+    env: engineEnv(engine),
     overrides: {
       ...(args.rounds !== null ? { rounds: args.rounds } : {}),
       ...(args.candidates !== null ? { candidates: args.candidates } : {}),
@@ -94,7 +129,9 @@ function evalConfig(args: CliArgs, runsDir: string): { config: ApodexConfig; war
     if (args.candidates === null) config.candidates = 2;
   }
   // Eval-specific safety knobs: a single task may not eat the whole evening.
-  config.budget.maxWallTimeMs = Math.min(config.budget.maxWallTimeMs, 15 * 60_000);
+  // 20 min headroom: a rounds=4 design pipeline with one escalated-timeout
+  // retry was observed to need > 15 min (run 20260611-155816, dedup-store).
+  config.budget.maxWallTimeMs = Math.min(config.budget.maxWallTimeMs, 20 * 60_000);
   config.budget.maxCostUsd = Math.min(config.budget.maxCostUsd, 3);
   config.runsDir = runsDir;
   return { config, warnings };
@@ -195,28 +232,57 @@ async function scoreAnswer(
 async function runTask(
   task: EvalTask,
   args: CliArgs,
+  engine: Engine,
   registry: ReturnType<typeof createStandaloneRegistry>,
   runsDir: string,
 ): Promise<TaskResult> {
-  const { config, warnings } = evalConfig(args, runsDir);
+  const { config, warnings } = evalConfig(args, engine, runsDir);
 
-  console.error(`[${task.id}] baseline arm...`);
-  const baselineRaw = await runBaseline(task, config, registry, runsDir);
-  console.error(`[${task.id}] baseline done in ${Math.round(baselineRaw.wallMs / 1000)}s; scoring...`);
-  const baselineScore = await scoreAnswer(task, baselineRaw.answer, config, registry, runsDir, "baseline");
+  // Baseline: BASELINE_SAMPLES independent single-pass draws, mean score.
+  const samples: ArmResult["score"][] = [];
+  let baselineAnswer = "";
+  let baselineWall = 0;
+  let baselineCalls = 0;
+  let baselineCost = 0;
+  let baselineError: string | undefined;
+  for (let s = 0; s < BASELINE_SAMPLES; s++) {
+    console.error(`[${engine}:${task.id}] baseline sample ${s + 1}/${BASELINE_SAMPLES}...`);
+    const raw = await runBaseline(task, config, registry, runsDir);
+    baselineWall += raw.wallMs;
+    baselineCalls += raw.subCalls;
+    baselineCost += raw.costUsd;
+    if (raw.error !== undefined) {
+      baselineError = raw.error;
+      samples.push({ score: 0, detail: `sample ${s + 1}: call failed (${raw.error})` });
+      continue;
+    }
+    if (baselineAnswer === "") baselineAnswer = raw.answer; // keep first answer for audit
+    const score = await scoreAnswer(task, raw.answer, config, registry, runsDir, `baseline-s${s + 1}`);
+    samples.push(score);
+  }
+  const mean = samples.reduce((acc, s) => acc + s.score, 0) / Math.max(1, samples.length);
+  const cwCount = samples.filter((s) => s.confidentlyWrong).length;
+  const baselineScore: ArmResult["score"] = {
+    score: mean,
+    detail: `mean of ${samples.length} samples [${samples.map((s) => s.score.toFixed(2)).join(", ")}]${
+      cwCount > 0 ? `; ${cwCount} confidently-wrong sample(s)` : ""
+    }`,
+    ...(cwCount * 2 > samples.length ? { confidentlyWrong: true } : {}),
+  };
 
-  console.error(`[${task.id}] pipeline arm...`);
+  console.error(`[${engine}:${task.id}] pipeline arm...`);
   const pipelineRaw = await runPipelineArm(task, config, warnings, registry);
-  console.error(`[${task.id}] pipeline done in ${Math.round(pipelineRaw.wallMs / 1000)}s; scoring...`);
+  console.error(`[${engine}:${task.id}] pipeline done in ${Math.round(pipelineRaw.wallMs / 1000)}s; scoring...`);
   const pipelineScore = await scoreAnswer(task, pipelineRaw.answer, config, registry, runsDir, "pipeline");
 
   const baseline: ArmResult = {
-    answer: baselineRaw.answer,
+    answer: baselineAnswer,
     score: baselineScore,
-    wallMs: baselineRaw.wallMs,
-    subCalls: baselineRaw.subCalls,
-    costUsd: baselineRaw.costUsd,
-    ...(baselineRaw.error !== undefined ? { error: baselineRaw.error } : {}),
+    samples,
+    wallMs: baselineWall,
+    subCalls: baselineCalls,
+    costUsd: baselineCost,
+    ...(baselineError !== undefined ? { error: baselineError } : {}),
   };
   const pipeline: ArmResult = {
     answer: pipelineRaw.answer,
@@ -226,7 +292,7 @@ async function runTask(
     costUsd: pipelineRaw.costUsd,
     ...(pipelineRaw.error !== undefined ? { error: pipelineRaw.error } : {}),
   };
-  return { task: task.id, bucket: task.bucket, baseline, pipeline };
+  return { task: task.id, bucket: task.bucket, engine, baseline, pipeline };
 }
 
 async function pool<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
@@ -248,8 +314,11 @@ function fmt(n: number): string {
 function printReport(results: TaskResult[]): string {
   const lines: string[] = [];
   const pad = (s: string, w: number) => s.padEnd(w);
+  const engine = results[0]?.engine ?? "?";
   lines.push("");
-  lines.push("=== apodex eval: single-pass baseline vs verification pipeline ===");
+  lines.push(
+    `=== apodex eval [engine: ${engine} heavy roles] - single-pass baseline (mean of ${BASELINE_SAMPLES}) vs verification pipeline ===`,
+  );
   lines.push("");
   lines.push(
     `${pad("task", 22)}${pad("bucket", 10)}${pad("baseline", 10)}${pad("pipeline", 10)}${pad("delta", 9)}notes`,
@@ -347,43 +416,52 @@ async function main(): Promise<void> {
   fs.mkdirSync(runsDir, { recursive: true });
 
   console.error(
-    `running ${tasks.length} tasks (concurrency ${args.concurrency}${args.smoke ? ", smoke" : ""}); artifacts: ${resultsDir}`,
+    `running ${tasks.length} tasks x engines [${args.engines.join(", ")}] (concurrency ${args.concurrency}${args.smoke ? ", smoke" : ""}); artifacts: ${resultsDir}`,
   );
 
   const registry = createStandaloneRegistry();
-  const results: TaskResult[] = [];
-  await pool(tasks, args.concurrency, async (task) => {
-    const result = await runTask(task, args, registry, runsDir);
-    results.push(result);
-    console.error(
-      `[${task.id}] DONE baseline=${fmt(result.baseline.score.score)} pipeline=${fmt(result.pipeline.score.score)}`,
-    );
-  });
+  const allResults: TaskResult[] = [];
+  const reports: string[] = [];
 
-  // Stable order for the report regardless of completion order.
-  results.sort((a, b) => a.task.localeCompare(b.task));
+  for (const engine of args.engines) {
+    const results: TaskResult[] = [];
+    await pool(tasks, args.concurrency, async (task) => {
+      const result = await runTask(task, args, engine, registry, runsDir);
+      results.push(result);
+      console.error(
+        `[${engine}:${task.id}] DONE baseline=${fmt(result.baseline.score.score)} pipeline=${fmt(result.pipeline.score.score)}`,
+      );
+    });
 
-  const report = printReport(results);
-  console.log(report);
-  fs.writeFileSync(path.join(resultsDir, "summary.txt"), report, "utf8");
+    // Stable order for the report regardless of completion order.
+    results.sort((a, b) => a.task.localeCompare(b.task));
+    allResults.push(...results);
+
+    const report = printReport(results);
+    console.log(report);
+    reports.push(report);
+
+    // Full answers for audit (first baseline sample + pipeline final).
+    for (const r of results) {
+      fs.writeFileSync(path.join(resultsDir, `${engine}.${r.task}.baseline.md`), r.baseline.answer, "utf8");
+      fs.writeFileSync(path.join(resultsDir, `${engine}.${r.task}.pipeline.md`), r.pipeline.answer, "utf8");
+    }
+  }
+
+  fs.writeFileSync(path.join(resultsDir, "summary.txt"), reports.join("\n\n"), "utf8");
   fs.writeFileSync(
     path.join(resultsDir, "results.json"),
     JSON.stringify(
-      results.map((r) => ({
+      allResults.map((r) => ({
         ...r,
-        baseline: { ...r.baseline, answer: `[${r.baseline.answer.length} chars, see runs/]` },
-        pipeline: { ...r.pipeline, answer: `[${r.pipeline.answer.length} chars, see runs/]` },
+        baseline: { ...r.baseline, answer: `[${r.baseline.answer.length} chars, see *.baseline.md]` },
+        pipeline: { ...r.pipeline, answer: `[${r.pipeline.answer.length} chars, see *.pipeline.md]` },
       })),
       null,
       2,
     ),
     "utf8",
   );
-  // Full answers for audit.
-  for (const r of results) {
-    fs.writeFileSync(path.join(resultsDir, `${r.task}.baseline.md`), r.baseline.answer, "utf8");
-    fs.writeFileSync(path.join(resultsDir, `${r.task}.pipeline.md`), r.pipeline.answer, "utf8");
-  }
   console.error(`\nresults persisted to ${resultsDir}`);
 }
 

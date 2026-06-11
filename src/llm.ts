@@ -125,7 +125,11 @@ export class SubCallClient {
         lastError = "aborted by caller";
         break;
       }
-      const timeoutSignal = AbortSignal.timeout(this.opts.timeoutMs);
+      // Timeout escalation: a retry of a TIMED-OUT call gets more time
+      // (1x, 1.5x, 2x), otherwise a healthy-but-slow generation is aborted
+      // again at the same mark and the retries only burn the wall budget.
+      const attemptTimeoutMs = Math.round(this.opts.timeoutMs * (1 + 0.5 * (attempts - 1)));
+      const timeoutSignal = AbortSignal.timeout(attemptTimeoutMs);
       const signal = this.opts.signal ? AbortSignal.any([this.opts.signal, timeoutSignal]) : timeoutSignal;
       try {
         const message = await completeSimple(
@@ -140,7 +144,7 @@ export class SubCallClient {
               },
             ],
           },
-          { ...baseOptions, signal },
+          { ...baseOptions, signal, timeoutMs: attemptTimeoutMs },
         );
         accumulate(message);
         // completeSimple reports failures in-band via stopReason/errorMessage.

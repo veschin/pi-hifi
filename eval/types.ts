@@ -37,11 +37,16 @@ export interface ArmResult {
   subCalls: number;
   costUsd: number;
   error?: string;
+  /** Baseline arm: per-sample scores when run with repetition (mean in `score`). */
+  samples?: TaskScore[];
 }
+
+export type Engine = "pro" | "flash";
 
 export interface TaskResult {
   task: string;
   bucket: Bucket;
+  engine: Engine;
   baseline: ArmResult;
   pipeline: ArmResult;
 }

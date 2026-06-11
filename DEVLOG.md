@@ -48,3 +48,55 @@
   Artifacts complete in `.apodex/runs/run-20260611-152826-s9azd1/`. The
   critique-steered revision visibly improved the answer - the GVR loop works as
   designed, not as best-of-K.
+- In-pi integration observed: a deepseek-flash host session called the `apodex`
+  tool; run completed through `ctx.modelRegistry` auth (status completed,
+  score 100, holistic approve, 9 sub-calls, 60 s) with artifacts in the
+  configured runs dir.
+- Eval harness self-check: reference solutions score 1.00 on all three hidden
+  code tests; deliberately broken variants score 0.50-0.56. The hidden tests
+  measure what they claim. Also fixed a spec conflict the self-check exposed:
+  `retry` must be a sync-validating function returning a Promise (an
+  `async function` cannot throw TypeError synchronously).
+- Critic round on the core engine produced 1 MUST-FIX (dangling rejected
+  promises in parallel candidate generation under budget exhaustion ->
+  Promise.allSettled), 2 SHOULD-FIX (retry token usage missing from budget
+  accounting; rubric-check errors silently scored as failed requirements ->
+  now tracked and surfaced), 2 NIT (SIGKILL timer bookkeeping; resolver cache
+  invariant documented). All applied; tsc + selfcheck re-verified.
+
+## 2026-06-11 - Eval run 1 post-mortem (results/20260611-155816)
+
+Run 1 (pro engine, 9 tasks): baseline 1.00 on ALL tasks - deepseek-v4-pro
+single-pass saturates this task set. All pipeline deltas were negative; each
+was traced to a concrete cause via run artifacts:
+
+1. code-retry -1.00: the pipeline's final solution races an attempt against an
+   abort and leaves the loser's rejection unhandled -> node crash mid-suite ->
+   "APODEX_TESTS" never printed -> 0 despite 7/10 checks objectively passing
+   before the crash. Two distinct findings: (a) a REAL pipeline miss - static
+   grading/verification cannot catch a floating-promise bug (the grader gave
+   100; the verifier flagged 2 other genuine defects but not this one);
+   (b) a measurement defect - crash-to-zero destroys partial credit.
+   Fixes: hidden tests now report after every check + trap
+   uncaughtException/unhandledRejection (re-scored: 0.70 with a crash note);
+   generator selftest convention now requires per-requirement checks incl.
+   abort paths and process-level leak handlers.
+2. design-dedup-store -0.13: two 360 s timeout-aborts on one generation burned
+   the 15-min wall budget; pipeline shipped the ungraded round-1 attempt
+   (GVR 68) without revision/verification. Fixes: per-retry timeout escalation
+   (1x/1.5x/2x) in SubCallClient; eval wall cap 15 -> 20 min.
+3. design-rate-limiter -0.13: the rubric CHECKER emitted invalid JSON (an
+   unescaped quote in its evidence string) for an item that actually passed
+   ("pass": true). Fix: boolean/enum field extraction falls back to a targeted
+   regex when full-JSON parse fails (verified against the exact malformed
+   sample).
+
+Paper cross-check (user-provided link -> same PDF as the task brief): GVR,
+fresh-context grader (task+candidate only, no reference/rubric leakage), the
+three causal-evidence axes, external verifier isolation, and N=4 candidates all
+match the implementation. Section 8.4 explains run 1's flat result directly:
+GVR gains concentrate where the base score is LOW (IMO-ProofBench Advanced
+12.38 -> 34.29) and only polish near-ceiling tasks. Consequence for the eval:
+run 2 measures two engines - pro (expected ~saturated, reported honestly) and
+flash in heavy roles (low base, where the verification team has headroom) -
+with baseline = mean of 3 samples (single-pass failure is a frequency).

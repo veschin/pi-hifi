@@ -25,11 +25,16 @@ const CODE_OUTPUT_CONVENTION = `Output convention for code answers (MANDATORY):
 - Put the complete solution in ONE fenced block tagged exactly: \`\`\`js solution
 - Put a self-contained test in ONE fenced block tagged exactly: \`\`\`js selftest
 - The selftest block must import the solution via: import ... from "./solution.mjs"
-  (ESM), run real assertions covering normal cases AND edge cases (empty/null
-  input, boundary sizes, error paths), print what it checks, and call
-  process.exit(1) on any failure (process.exit(0) or clean exit on success).
-- The selftest must be runnable with plain "node selftest.mjs" - no npm installs,
-  no network, no external files.
+  (ESM) and exercise EVERY requirement the task states - one check per stated
+  behavior, including error paths, abort/cancellation paths, validation throws,
+  boundary sizes, and empty/null input. A requirement without a check counts as
+  unverified.
+- The selftest must also fail (non-zero exit) when the solution leaks an
+  unhandled rejection or uncaught exception - install process-level handlers
+  for both ("unhandledRejection", "uncaughtException").
+- Print what each check covers; process.exit(1) on any failure, clean exit on
+  success. Runnable with plain "node selftest.mjs" - no npm installs, no
+  network, no external files.
 - After the blocks, explain the approach, edge cases covered, and limitations.`;
 
 export function generatorSystem(mode: TaskMode): string {

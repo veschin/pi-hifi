@@ -4,6 +4,34 @@ import { runNodeScript, extractCodeBlocks } from "../src/exec.ts";
 import { parseJsonLoose } from "../src/json.ts";
 import type { ScoreContext, TaskScore } from "./types.ts";
 
+/**
+ * Robust boolean-field extraction from checker output. Checkers sometimes emit
+ * structurally invalid JSON (an unescaped quote inside an evidence string broke
+ * a real run) while the machine-generated boolean fields remain reliable -
+ * fall back to a targeted regex before declaring the check errored.
+ */
+export function extractBoolField(text: string, field: string): boolean | null {
+  const parsed = parseJsonLoose<Record<string, unknown>>(text);
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && typeof parsed[field] === "boolean") {
+    return parsed[field];
+  }
+  const match = new RegExp(`"${field}"\\s*:\\s*(true|false)`).exec(text);
+  if (match) return match[1] === "true";
+  return null;
+}
+
+/** Same fallback discipline for short string-enum fields. */
+export function extractEnumField(text: string, field: string, values: readonly string[]): string | null {
+  const parsed = parseJsonLoose<Record<string, unknown>>(text);
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const value = parsed[field];
+    if (typeof value === "string" && values.includes(value)) return value;
+  }
+  const match = new RegExp(`"${field}"\\s*:\\s*"(${values.join("|")})"`).exec(text);
+  if (match && match[1] !== undefined) return match[1];
+  return null;
+}
+
 // --- code bucket: hidden deterministic tests -------------------------------
 
 /**
@@ -30,7 +58,11 @@ export async function scoreCodeWithHiddenTest(
   if (evidence.timedOut) {
     return { score: 0, detail: "hidden test timed out (likely hang/inf-loop in solution)" };
   }
-  const match = /APODEX_TESTS (\d+)\/(\d+)/.exec(evidence.stdout);
+  // Tests report after every check; the LAST report line carries the final
+  // tally, and a crash mid-suite still yields partial credit for checks that
+  // objectively passed before it.
+  const matches = [...evidence.stdout.matchAll(/APODEX_TESTS (\d+)\/(\d+)/g)];
+  const match = matches[matches.length - 1];
   if (!match) {
     return {
       score: 0,
@@ -45,9 +77,10 @@ export async function scoreCodeWithHiddenTest(
   if (!Number.isFinite(passed) || !Number.isFinite(total) || total <= 0) {
     return { score: 0, detail: `unparseable test report: ${match[0]}` };
   }
+  const crashed = /CRASH |UNHANDLED_REJECTION /.test(evidence.stdout);
   return {
     score: passed / total,
-    detail: `hidden tests: ${passed}/${total} passed (exit ${evidence.exitCode})`,
+    detail: `hidden tests: ${passed}/${total} passed (exit ${evidence.exitCode})${crashed ? " - solution crashed mid-suite (uncaught error/rejection)" : ""}`,
   };
 }
 
@@ -92,12 +125,9 @@ export async function scoreDesignRubric(
     let pass = false;
     let checkError = false;
     if (outcome.ok) {
-      const raw = parseJsonLoose<{ pass?: unknown }>(outcome.text);
-      if (raw && typeof raw === "object" && !Array.isArray(raw) && typeof raw.pass === "boolean") {
-        pass = raw.pass;
-      } else {
-        checkError = true;
-      }
+      const verdict = extractBoolField(outcome.text, "pass");
+      if (verdict !== null) pass = verdict;
+      else checkError = true;
     } else {
       checkError = true;
     }
@@ -138,17 +168,14 @@ export async function scoreIncidentDiagnosis(
   if (!outcome.ok) {
     return { score: 0, detail: `diagnosis check failed: ${outcome.error ?? "unknown"}` };
   }
-  const raw = parseJsonLoose<{
-    primary_matches?: unknown;
-    mentioned_anywhere?: unknown;
-    primary_confidence?: unknown;
-  }>(outcome.text);
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return { score: 0, detail: "diagnosis check returned unparseable JSON" };
+  const primaryField = extractBoolField(outcome.text, "primary_matches");
+  const mentionedField = extractBoolField(outcome.text, "mentioned_anywhere");
+  if (primaryField === null || mentionedField === null) {
+    return { score: 0, detail: "diagnosis check returned unparseable verdict (both JSON and field fallback failed)" };
   }
-  const primary = raw.primary_matches === true;
-  const mentioned = raw.mentioned_anywhere === true;
-  const confidence = raw.primary_confidence === "high" ? "high" : raw.primary_confidence === "medium" ? "medium" : "low";
+  const primary = primaryField;
+  const mentioned = mentionedField;
+  const confidence = extractEnumField(outcome.text, "primary_confidence", ["high", "medium", "low"]) ?? "low";
 
   if (primary) {
     return { score: 1, detail: `primary diagnosis correct (confidence ${confidence})` };

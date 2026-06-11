@@ -31,15 +31,22 @@ Export (ESM): export function subtractIntervals(a, b)
 ${OUTPUT_NOTE}`;
 
 const intervalHiddenTest = `import { subtractIntervals } from "./solution.mjs";
-let passed = 0, total = 0;
+const TOTAL = 16;
+let passed = 0;
+// Report after every check and on crashes: a solution that dies mid-suite
+// (uncaught throw / unhandled rejection) keeps partial credit for checks that
+// objectively passed; the scorer reads the LAST report line.
+function report() { console.log(\`APODEX_TESTS \${passed}/\${TOTAL}\`); }
+process.on("uncaughtException", (e) => { console.log("CRASH " + (e && e.message)); report(); process.exit(1); });
+process.on("unhandledRejection", (e) => { console.log("UNHANDLED_REJECTION " + (e && e.message)); report(); process.exit(1); });
 function eq(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
 function check(name, fn) {
-  total++;
   try {
     const r = fn();
     if (r === true) { passed++; console.log("ok " + name); }
     else console.log("FAIL " + name + " -> " + JSON.stringify(r));
   } catch (e) { console.log("FAIL " + name + " threw " + e.message); }
+  report();
 }
 function throws(fn) {
   try { fn(); return false; } catch (e) { return e instanceof TypeError; }
@@ -60,8 +67,8 @@ check("throws on bad pair", () => throws(() => subtractIntervals([[1]], [])));
 check("throws on start>end", () => throws(() => subtractIntervals([[5, 1]], [])));
 check("throws on non-integer", () => throws(() => subtractIntervals([[1.5, 3]], [])));
 check("throws on NaN", () => throws(() => subtractIntervals([[NaN, 3]], [])));
-console.log(\`APODEX_TESTS \${passed}/\${total}\`);
-process.exit(passed === total ? 0 : 1);
+report();
+process.exit(passed === TOTAL ? 0 : 1);
 `;
 
 // ---------------------------------------------------------------------------
@@ -99,14 +106,18 @@ Behavior:
 ${OUTPUT_NOTE}`;
 
 const retryHiddenTest = `import { retry } from "./solution.mjs";
-let passed = 0, total = 0;
+const TOTAL = 10;
+let passed = 0;
+function report() { console.log(\`APODEX_TESTS \${passed}/\${TOTAL}\`); }
+process.on("uncaughtException", (e) => { console.log("CRASH " + (e && e.message)); report(); process.exit(1); });
+process.on("unhandledRejection", (e) => { console.log("UNHANDLED_REJECTION " + (e && e.message)); report(); process.exit(1); });
 async function check(name, fn) {
-  total++;
   try {
     const r = await fn();
     if (r === true) { passed++; console.log("ok " + name); }
     else console.log("FAIL " + name + " -> " + JSON.stringify(r));
   } catch (e) { console.log("FAIL " + name + " threw " + (e && e.message)); }
+  report();
 }
 const fakeSleep = (log) => (ms, _signal) => { log.push(ms); return Promise.resolve(); };
 
@@ -188,8 +199,8 @@ await check("validates fn", async () => {
 await check("validates negative retries", async () => {
   try { retry(async () => 1, { retries: -1 }); return "no throw"; } catch (e) { return e instanceof TypeError; }
 });
-console.log(\`APODEX_TESTS \${passed}/\${total}\`);
-process.exit(passed === total ? 0 : 1);
+report();
+process.exit(passed === TOTAL ? 0 : 1);
 `;
 
 // ---------------------------------------------------------------------------
@@ -231,14 +242,18 @@ delete() also discards the in-flight registration so the next getOrCompute start
 ${OUTPUT_NOTE}`;
 
 const lruHiddenTest = `import { AsyncLruCache } from "./solution.mjs";
-let passed = 0, total = 0;
+const TOTAL = 9;
+let passed = 0;
+function report() { console.log(\`APODEX_TESTS \${passed}/\${TOTAL}\`); }
+process.on("uncaughtException", (e) => { console.log("CRASH " + (e && e.message)); report(); process.exit(1); });
+process.on("unhandledRejection", (e) => { console.log("UNHANDLED_REJECTION " + (e && e.message)); report(); process.exit(1); });
 async function check(name, fn) {
-  total++;
   try {
     const r = await fn();
     if (r === true) { passed++; console.log("ok " + name); }
     else console.log("FAIL " + name + " -> " + JSON.stringify(r));
   } catch (e) { console.log("FAIL " + name + " threw " + (e && e.message)); }
+  report();
 }
 function clock(start = 0) { let t = start; return { now: () => t, tick: (ms) => { t += ms; } }; }
 
@@ -307,8 +322,8 @@ await check("capacity 1 with getOrCompute", async () => {
   await c.getOrCompute("b", async () => 2);
   return c.get("b") === 2 && c.get("a") === undefined && c.size === 1;
 });
-console.log(\`APODEX_TESTS \${passed}/\${total}\`);
-process.exit(passed === total ? 0 : 1);
+report();
+process.exit(passed === TOTAL ? 0 : 1);
 `;
 
 export const codeTasks: EvalTask[] = [
