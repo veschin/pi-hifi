@@ -399,7 +399,16 @@ pi -e git:github.com/veschin/pi-apodex
 ```
 
 No `npm install` is required for in-session use: inside Pi, the SDK imports
-resolve to Pi's own copies via jiti aliasing.
+resolve to Pi's own copies via jiti aliasing (verified by loading a pristine
+clone with no `node_modules`).
+
+Pi fetches git sources over HTTPS. On networks where `https://github.com` is
+filtered, install via SSH instead - a plain clone into Pi's global extension
+directory is equivalent:
+
+```bash
+git clone git@github.com:veschin/pi-apodex ~/.pi/agent/extensions/pi-apodex
+```
 
 ### 7.2 Invocation
 
