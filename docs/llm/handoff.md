@@ -85,17 +85,23 @@ judgment, eval judge pin diverges from in-session defaults.
    composeDelivery advertise "reference <runDir>/final.md in follow-up
    tasks", and/or let the scout see runsDir artifacts (.apodex/runs is
    gitignored, so invisible to the listing today).
-4. **Browser/visual tasks have no verification path (backlog, 2026-06-12,
-   live incident)**: the user fed a Three.js/WebGL single-HTML design doc;
-   the pipeline can only run node self-tests, so there is NO execution
-   evidence for browser code - the session model correctly bailed and
-   implemented it directly ("apodex зациклился ... реализую сам"). The
-   analyst asks about format but has no verdict for "this task does not fit
-   the pipeline - implement outside it"; its outcomes are only questions /
-   ready. Fix directions: add an analyst verdict "unfit" (with the reason)
-   that tells the caller to implement directly rather than looping; OR a
-   browser/headless runner (ties into option F sandbox); until then, the
-   honest answer for GUI/visual work is "don't route it through apodex".
+4. **Generation and verification are wrongly coupled (backlog, 2026-06-12,
+   live incident - user-corrected framing)**: the user fed a Three.js/WebGL
+   single-HTML design doc; the pipeline can only run node self-tests, so it
+   has NO execution evidence for browser code and effectively refused. The
+   user's point is decisive: "меня не ебёт что оно только на ноде умеет, мне
+   надо реализацию". The pipeline must ALWAYS deliver an implementation in
+   the requested language/format; execution verification is a SEPARATE,
+   best-effort layer - run it when a runner exists (node today), otherwise
+   ship the code with an explicit "not executed - verify on your side" flag
+   (the hifi named-skip already models this). DO NOT add an analyst "unfit"
+   verdict (rejected by the user: refusing the user is wrong). Fix
+   directions: (a) the node-only selftest convention must not gate non-node
+   languages - let the generator emit Go/browser/etc. and skip the exec
+   probe with a surfaced reason instead of forcing the `js solution` block;
+   (b) multi-language / browser-headless runners (ties into option F
+   sandbox) extend coverage but are NOT a precondition for delivering the
+   code. The split: code is the deliverable, execution evidence is a bonus.
 
 ## Next options (user picks; not a queue)
 
