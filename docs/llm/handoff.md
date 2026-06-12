@@ -102,6 +102,15 @@ judgment, eval judge pin diverges from in-session defaults.
    (b) multi-language / browser-headless runners (ties into option F
    sandbox) extend coverage but are NOT a precondition for delivering the
    code. The split: code is the deliverable, execution evidence is a bonus.
+   **Unifying view (user, 2026-06-12)**: item 4 and option F are two ends of
+   one design. A task asking for a concrete implementation SHOULD be run in
+   the sandbox (option F) on its actual language - that is the normal path,
+   not an extra. "Theory / general" work (design, incident, explanation) has
+   nothing to execute and stays on text-level verification (rubric + claim
+   audit, already working). The decision is one fork: executable -> sandbox
+   with a real run; non-executable -> text checks. Today's gap was an
+   executable-but-non-node task falling through that fork; the sandbox
+   (multi-language runner inside F) closes it.
 
 ## Next options (user picks; not a queue)
 
