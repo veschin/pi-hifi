@@ -5,6 +5,22 @@ kind: guide
 
 # Handoff
 
+## Operating mode (the user's standing directive for this project)
+
+Work **autonomously and continuously** - do NOT stop for check-ins; take the
+backlog all the way to the finish at **production-hifi quality**. Spending on real
+pi runs (cheap-flash classification, live smokes, paid eval) to VERIFY is
+sanctioned - do not ask before spending on verification. The bars are
+non-negotiable: verify FREE first (selftests, no LLM) before paying; "done" means
+OBSERVED behavior, never "looks right"; commit each verified slice to
+`feat/sandbox` with what-was-verified in the body; critic before the completion
+message, with `model:opus` for any sandbox/isolation/security change. Only stop to
+ask the user when a decision is genuinely his and unresolvable from context (e.g.
+D1's benchmark-vs-mode-aware choice, §3) - and even then, do the safely-completable
+work first. Never cram a large item into exhausted context (a half-done broken
+state is worse than a clean pause); break it into committed green slices. See the
+`pi-hifi-autonomous-mode` memory note.
+
 State as of 2026-06-13 (long autonomous session). Branch **feat/sandbox**, ~16
 commits ahead of `main`, NOT pushed, do NOT touch `main`. Product is now
 **pi-hifi** in code: the `/hifi` command (+ `/apodex` legacy alias), the `hifi`
