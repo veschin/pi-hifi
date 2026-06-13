@@ -5,171 +5,148 @@ kind: guide
 
 # Handoff
 
-State as of 2026-06-12 (second session that day): brief stage (task analyst)
-+ heavy judge implemented and verified locally; NOT committed when this file
-was written - the session ends with the commit. Previously published state:
-commit `7ca3b50` (main, https://github.com/veschin/pi-apodex).
+State as of 2026-06-13. Branch **feat/sandbox**, 7 commits ahead of `main`
+(the 6 below + this handoff commit), NOT pushed, do NOT touch `main`. Product is mid-rename to `pi-hifi` (repo still
+named pi-apodex; `apodex` is being demoted to one internal step). The design
+target is `docs/pi-hifi-architecture.md`; the per-stage invariants are
+`20_pipeline.md`.
 
-## What exists (verified this session)
+This session (3 verified milestones, all committed to feat/sandbox):
+```
+4afb8dc feat(sandbox): admission gate for candidate exec; fail-closed default
+e6d3761 feat(pipeline): wire triage into the pipeline; mega tasks return a roadmap
+94d1bc2 feat(triage): finish & verify the triage gate-driver
+599dc31 feat(exec): route live execution through the sandbox, stack-agnostic   <- sandbox foundation
+7d91b3f feat(runner): stack-agnostic experiment runner over the sandbox        <-   (prior session)
+cab82cc feat(sandbox): cell + admission scheduler                              <-
+```
 
-- **Brief stage** (`src/brief.ts`, devlog 03): an `analyst` role
-  (session-heavy, thinking high) elaborates the raw task BEFORE any solution
-  work. Interactive runs can PAUSE: clarification questions or a draft brief
-  for user review come back as `ApodexResult.clarification`; the session
-  model relays them and re-invokes with `# Clarification answers` /
-  `# Approved brief` sections in the task (stateless, chat-mediated).
-  Ready briefs join the shared materials as `# Task brief`; acceptance
-  criteria are enforced by the selftest convention and the grader.
-- **Judge is a heavy role now**: session model + thinking high by default
-  (was: mirror of the flash worker, thinking off). Scout still mirrors.
-- Full pipeline: brief -> scout context -> classify -> [code: candidates ->
-  exec -> judge] -> GVR -> claim audit -> assembly -> delivery. tsc clean,
-  selfcheck passes, live flash verification of both brief paths (pause with
-  questions; approved-brief end-to-end, $0.0074).
-- Eval protocol pin 2 (50_eval.md): brief OFF + judge pinned flash in
-  run-eval.ts - published `docs/eval-results/20260611-164416` numbers stay
-  comparable. Both smokes pin `APODEX_BRIEF_ENABLED=0`.
+## What exists (verified this session, observed)
 
-## What does NOT exist
+- **Sandbox foundation** (`src/sandbox.ts`, `src/sandbox-pool.ts`,
+  `src/runner.ts`, `src/exec.ts`): a kernel-enforced rootless cell
+  (`systemd-run --user --scope` cgroup v2 + `bwrap`) with an admission
+  scheduler (cellSem / ramReserve / gpuSem), a stack-agnostic experiment
+  runner (node + python), and the live exec path routed through it. Selftests:
+  `sandbox-selftest`, `sandbox-pool-selftest`, `runner-selftest`,
+  `exec-selftest` (all SKIP gracefully without the rootless tier; PASS on a
+  tiered host - exercised this session via exec-selftest + the smokes).
+- **Triage gate-driver** (`src/triage.ts`, milestone 94d1bc2): one analyst
+  classification call -> `CompositionPlan {type, scale, oracle, archRisk,
+  needsDialog, confidence, roadmap}` from a FIXED vocabulary (1.7). Fail-safe:
+  malformed / low-confidence / roadmap-less-mega -> coerced to needsDialog;
+  budget/abort propagate; any other failure -> fail-safe plan. FREE
+  `triage-selftest` 16/16 + LIVE flash (mega->mega, micro->micro).
+- **Triage wired into the pipeline** (milestone e6d3761): Stage T at the very
+  start of `runApodex`, gated by `config.triage.enabled` (default ON; OFF in
+  `run-eval.ts` for comparability). The ONLY acted-on gate today is
+  `scale === "mega"`: it early-returns `ApodexResult.clarification` kind
+  `"roadmap"` with `finalAnswer:""` (the budget guard - the solve pipeline
+  never fires on a whole system), mirroring the brief clarification pause.
+  `ApodexResult.composition` records the plan on every post-triage exit path.
+  20_pipeline invariant 19. FREE + LIVE `smoke-triage` (mega->roadmap, 1 call;
+  micro->full pipeline).
+- **Sandbox admission gate** (milestone 4afb8dc): `execAdmission(tier,
+  allowUnsandboxed)` (src/sandbox.ts, pure/unit-tested). `config.exec
+  .allowUnsandboxed` default **FALSE / fail-closed** (opus critic): a tier-less
+  host REFUSES to run model code (ships flagged "not executed") unless the
+  operator opts in, in which case the pipeline warns loudly each run. Enforced
+  in `runApodex` (code mode) via a local `execEnabled`. Closes the prior
+  silent-unsandboxed gap. FREE `exec-selftest` (8/8) + LIVE `exec-gate-smoke`
+  (both arms) + opus critic proved escape containment.
+- **Full pro pipeline works end-to-end with all the above** (smoke-pipeline,
+  this session): chunk task -> mode code, score 100, all 10 atoms verified,
+  holistic approve, $0.0238 / 19 calls. Triage ran (non-mega -> proceeded),
+  exec sandboxed.
+- Prior brief stage (`src/brief.ts`), scout context (`src/context.ts`), GVR,
+  causal selection, claim audit, delivery - unchanged, still hold.
 
-- **Validation status (user-mandated note, 2026-06-12): this session's code
-  was NOT fully validated and may contain bugs.** What ran: tsc, selfcheck,
-  ONE live flash run of the questions path and of the approved-brief path,
-  the user's live TUI run of the questions round-trip, two critic rounds.
-  What never ran: the brief-review pause live, a full clarification->answers->
-  approved-brief->final-answer cycle end-to-end, acceptance-criteria
-  enforcement quality on real tasks, any run with the new heavy-judge default
-  in the selector path. Treat src/brief.ts and the pipeline wiring as
-  lightly-tested until exercised.
-- README not updated this session: §3 method description, the roles table,
-  and config docs predate the analyst role and brief stage.
-- No in-TUI live test of the clarification round-trip (tool result ->
-  session model relays -> re-invocation) - verified only at the runApodex
-  API level; the wake-up itself is TUI behavior.
-- **No execution sandbox** (user-flagged as REQUIRED, 2026-06-12): self-tests
-  run model-authored code directly on the host as a bare node process (no
-  shell inherited, env stripped to NODE_ENV) - but the test code itself can
-  spawn arbitrary processes via child_process, write outside its tempdir, and
-  open network connections; heavy tests also compete with the host for
-  CPU/RAM. The narrow runner is behavioral discipline, not a boundary.
-- Everything from the previous handoff still open: no abort for
-  /apodex-launched runs, no detached runs, no web-grounded verification, no
-  judge panel, no consistency cascade.
-- The eval cannot measure the brief stage or the heavy judge (saturated at
-  pro, and both are pinned off for comparability); a harder benchmark is the
-  prerequisite - also for the user's "catch up to Opus" question.
+## What does NOT exist yet (remaining backlog, roughly dependency-ordered)
 
-## Open design questions (user asked to mark these; resolve later)
+- **3.2b oracle routing**: triage's `oracle` (execute/repo-suite/bench/web/none)
+  and `archRisk`/`needsDialog` are RECORDED but only `scale==="mega"` is acted
+  on. Wire oracle -> grounding choice; `none` = ship flagged (the Three.js
+  incident). archRisk -> probe (needs 3.6). Caveat: oracle gating overlaps the
+  existing exec/mode handling - design the hook carefully.
+- **3.3 primitive layer**: research / factcheck as typed modules over
+  SubCallClient, each with a `hifiGate` checklist (spec: architecture §2).
+  experiment ~= done (runExperiment); generate/judge/synthesize exist as roles
+  to formalize.
+- **3.4 D1 - pin generator -> flash + measure**: `src/config.ts` generator
+  defaults to SESSION_MODEL (strong), contradicting the "cheap workers"
+  premise. Pin to flash, then re-point the eval metric to "hifi + strong
+  session vs strong single-pass on HARD tasks" (needs the harder benchmark;
+  the current eval saturates).
+- **3.5 generator prompt generalization** (`src/prompts.ts`): still forces
+  `js solution`/`js selftest`, so the pipeline GENERATES node even though the
+  runner RUNS any language. Generalize to language-tagged blocks; gate behind a
+  flag (the eval pins js for comparability).
+- **3.6 probe stage**: probe-first design grounding (GVR-class generate->run->
+  read-failure->fix loop building a PoC in the sandbox before committing a
+  design). Needs a convergence/budget policy.
+- **Rename pi-apodex -> pi-hifi** (1.1): package.json, `/apodex`->`/hifi`
+  (+alias), `.apodex/runs`, docs, identifiers. One scoped commit; grep every
+  call site (the wiring lesson, 90_lessons).
 
-See 20_pipeline.md "Open questions (brief stage)": review-stop friction
-(every standard-complexity interactive run pauses), analyst runs before
-scout (no workspace context when asking), approved-brief marker can match
-inside a code fence, no cross-run question cap, complexity gate is prompt
-judgment, eval judge pin diverges from in-session defaults.
+## Deferred hardening (opus critic, 2026-06-13 - documented in 30_subcall_infra)
 
-## Current problems (user-facing, live)
+- **Single-door exec admission**: the security decision lives in TWO places -
+  `execAdmission` (exec.ts bare-host gate) and `runCell`'s degraded+`untrusted`
+  refusal (sandbox.ts). `runExperiment` (runner.ts) calls the scheduler
+  directly, gated only by the latter (fails closed today via `untrusted` default
+  true, but is one `untrusted:false` from an ungated path). Unify before wiring
+  runExperiment into the pipeline.
+- **`__setSandboxTier`** is exported from src/sandbox.ts (a process-global tier
+  override, test-only intent). Guard / isolate before any in-process multi-run
+  embed; the smokes reset it in `finally`.
 
-1. The user's live pi session needs `/reload` to get the new extension code,
-   then one real `/apodex` with a vague task to see the clarification
-   round-trip in the TUI (first live exercise of triggerTurn on
-   apodex-clarification messages).
-2. Huge monolithic tasks: the analyst now negotiates slicing in the brief,
-   but the user still slices projects manually across runs.
-3. **Cross-run context (backlog, 2026-06-12, live incident)**: runs are
-   stateless and the calling model does not realize it - a follow-up
-   "имплементируй диздок" arrived without the previous run's design doc
-   (run-20260612-163401); the analyst correctly paused, the session model had
-   to be told to inline the prior final.md. Fix directions: state
-   STATELESSNESS explicitly in the tool/task param descriptions ("no memory
-   of previous runs or this chat - inline prior outputs"), have
-   composeDelivery advertise "reference <runDir>/final.md in follow-up
-   tasks", and/or let the scout see runsDir artifacts (.apodex/runs is
-   gitignored, so invisible to the listing today).
-4. **Generation and verification are wrongly coupled (backlog, 2026-06-12,
-   live incident - user-corrected framing)**: the user fed a Three.js/WebGL
-   single-HTML design doc; the pipeline can only run node self-tests, so it
-   has NO execution evidence for browser code and effectively refused. The
-   user's point is decisive: "меня не ебёт что оно только на ноде умеет, мне
-   надо реализацию". The pipeline must ALWAYS deliver an implementation in
-   the requested language/format; execution verification is a SEPARATE,
-   best-effort layer - run it when a runner exists (node today), otherwise
-   ship the code with an explicit "not executed - verify on your side" flag
-   (the hifi named-skip already models this). DO NOT add an analyst "unfit"
-   verdict (rejected by the user: refusing the user is wrong). Fix
-   directions: (a) the node-only selftest convention must not gate non-node
-   languages - let the generator emit Go/browser/etc. and skip the exec
-   probe with a surfaced reason instead of forcing the `js solution` block;
-   (b) multi-language / browser-headless runners (ties into option F
-   sandbox) extend coverage but are NOT a precondition for delivering the
-   code. The split: code is the deliverable, execution evidence is a bonus.
-   **Unifying view (user, 2026-06-12)**: item 4 and option F are two ends of
-   one design. A task asking for a concrete implementation SHOULD be run in
-   the sandbox (option F) on its actual language - that is the normal path,
-   not an extra. "Theory / general" work (design, incident, explanation) has
-   nothing to execute and stays on text-level verification (rubric + claim
-   audit, already working). The decision is one fork: executable -> sandbox
-   with a real run; non-executable -> text checks. Today's gap was an
-   executable-but-non-node task falling through that fork; the sandbox
-   (multi-language runner inside F) closes it.
+## Honest gaps (carried, still true)
 
-## Next options (user picks; not a queue)
-
-- **A. Live TUI round-trip test (~15 min, blocks nothing).** /reload, run
-  `/apodex хочу клон факторио в 3д`, answer the questions, approve the brief,
-  watch the full flow.
-- **B. Harder benchmark (~1 d).** Tasks where pro baseline lands 0.5-0.8;
-  unlocks measuring brief/judge/Opus-comparison. Optional third arm: Opus
-  single-pass baseline (roles are provider-agnostic).
-- **C. README refresh (~1-2 h).** §3 + roles/config tables: analyst, brief,
-  clarification contract, judge default.
-- **D. Brief-review config gate (~1 h).** `brief.review: always|never` for
-  users who want questions but not the review stop.
-- **E. Previous options remain**: judge panel, consistency cascade,
-  command-path abort, detached runs.
-- **F. Execution sandbox (~1-2 d, user-flagged REQUIRED).** Isolated runner
-  for self-tests (container or equivalent) with CPU/RAM/time caps and no
-  default network: (1) keeps heavy tests from loading the host system,
-  (2) makes running model-authored code an actual security boundary instead
-  of convention. Prerequisite for untrusted/hostile tasks; unlocks the
-  multi-language runner registry (go/python) and any relaxation of the
-  no-npm/no-network selftest convention.
-
-## Read order
-
-1. This file.
-2. [20_pipeline.md](20_pipeline.md) - invariants 17-18 + open questions are
-   new (brief stage).
-3. [30_subcall_infra.md](30_subcall_infra.md) - seven roles, scout-only
-   mirroring; [40_extension.md](40_extension.md) - clarification contract.
-4. [50_eval.md](50_eval.md) - protocol pin 2 - and
-   [90_lessons.md](90_lessons.md) before trusting any measurement.
-5. [devlog/03_devlog_brief_stage.md](devlog/03_devlog_brief_stage.md) for
-   this session's reasoning.
+- `oomKilled` in CellEvidence is a documented heuristic (a payload can fake
+  exit 137); not load-bearing - the selector gates on exit==0. A robust fix
+  reads the cgroup `memory.events`, deprioritized for the threat model.
+- Docker warm-pool backend NOT built (now niche per the rootless-primary
+  decision; architecture §4 flipped this session).
+- Cross-run statelessness (the "имплементируй диздок" incident): runs are
+  stateless and the calling model may not inline prior outputs. Mitigations
+  pending in the tool/param descriptions.
+- README predates analyst/brief/triage/sandbox.
 
 ## Smoke test (run before touching anything)
 
 ```bash
-cd ~/ai/pi-apodex && npx tsc --noEmit && npx tsx eval/selfcheck.ts
-# expected: no tsc output; selfcheck ends with
-# "SELFCHECK PASSED: hidden tests are sound"
-
-npx tsx eval/smoke-context.ts
-# expected: "SMOKE-CONTEXT PASSED" (~80 s, ~$0.02, all-flash, brief pinned off)
+cd ~/ai/pi-apodex
+npx tsc --noEmit                          # no output
+npx tsx eval/selfcheck.ts                 # refs 1.00, broken 0.50-0.56; "SELFCHECK PASSED"
+npx tsx eval/triage-selftest.ts           # FREE 16/16; "TRIAGE-SELFTEST PASSED (free)"
+npx tsx eval/exec-selftest.ts             # FREE 8/8 (admission + exec path)
+# tiered host only (else they SKIP):
+npx tsx eval/sandbox-selftest.ts          # 5/5
+npx tsx eval/sandbox-pool-selftest.ts     # 5/5
+npx tsx eval/runner-selftest.ts           # node+python pass/fail
+./docs/llm/validate.sh                     # OK: ... links valid
 ```
 
-Brief-stage live check (no committed smoke yet - token-economy decision):
-re-create the two-path script from devlog 03 / this session's transcript, or
-run option A above. Path assertions: vague task + briefInteractive ->
-`clarification.kind === "questions"`; task containing `# Approved brief` ->
-no pause, `result.brief !== null`.
+Paid (optional, ~cents): `APODEX_TRIAGE_LIVE=1 npx tsx eval/triage-selftest.ts`
+(mega/micro live); `npx tsx eval/smoke-triage.ts` (mega gate end-to-end);
+`npx tsx eval/exec-gate-smoke.ts` (gate both ways, forces degraded tier);
+`npx tsx eval/smoke-pipeline.ts` (full pro pipeline).
+
+## Read order
+
+1. This file.
+2. [20_pipeline.md](20_pipeline.md) - invariant 19 (triage stage) is new.
+3. [30_subcall_infra.md](30_subcall_infra.md) - the exec runner / `execAdmission`
+   gate + config (triage, exec.allowUnsandboxed) + the deferred hardening note.
+4. [../pi-hifi-architecture.md](../pi-hifi-architecture.md) §4 (rootless-primary)
+   for the sandbox design; [50_eval.md](50_eval.md) before any measurement.
+5. [devlog/04_devlog_triage_sandbox_gate.md](devlog/04_devlog_triage_sandbox_gate.md)
+   for this session's reasoning.
 
 ## Agent errors to log
 
-1. (carried over, still open) The final critic round over the publication
-   batch (README/LICENSE/packaging) was interrupted on 2026-06-11 and never
-   re-run.
-2. The shared-value wiring lesson struck AGAIN (third time): `enrichedTask`/
-   `materials` reached most-but-not-all consumers (assembler, planner,
-   handoff renderer missed); the critic caught it, same as devlog 02. The
-   90_lessons rule ("grep every call site of the thing it replaces") was not
-   applied during implementation - it must run BEFORE handing to the critic.
+1. (carried, still open) The final critic round over the publication batch
+   (README/LICENSE/packaging) was interrupted on 2026-06-11 and never re-run.
+2. (carried) The shared-value wiring lesson (grep every call site BEFORE the
+   critic) - applied cleanly this session (triage `composition` reached all
+   ApodexResult literals; tsc enforced completeness).
