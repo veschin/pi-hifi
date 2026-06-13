@@ -205,8 +205,20 @@ function scopeArgs(limits: CellLimits): string[] {
 
 let cachedTier: SandboxTier | null = null;
 
-/** Test hook: force the detected tier (and bypass the probe). */
+/**
+ * Test hook: force the detected tier (and bypass the probe). GUARDED - this is a
+ * process-global override of the security boundary's view of the host, so it
+ * throws unless APODEX_TEST_HOOKS=1 is set, keeping it unreachable in a normal
+ * embed (a stray/malicious call cannot silently make a tier-less host look safe).
+ * Threat note: even if the env leaks into an embed (env is inherited by child
+ * processes), this cannot WEAKEN the boundary - forcing a fake `rootless` makes
+ * systemd-run/bwrap fail to spawn (fail-closed), and forcing `degraded` only
+ * refuses more; the env merely makes the hook callable, never unsandboxes work.
+ */
 export function __setSandboxTier(t: SandboxTier | null): void {
+  if (process.env.APODEX_TEST_HOOKS !== "1") {
+    throw new Error("__setSandboxTier is a test-only hook; set APODEX_TEST_HOOKS=1 to enable it");
+  }
   cachedTier = t;
 }
 
@@ -309,8 +321,15 @@ export async function runCell(spec: CellSpec): Promise<CellEvidence> {
   };
   if (spec.argv.length === 0) return { ...base, tier, skippedReason: "empty argv" };
 
-  // No boundary available: refuse untrusted work instead of faking containment.
-  if (tier === "degraded" && untrusted) {
+  // Single-door admission: the tier -> {sandbox, disabled} THRESHOLD lives in
+  // ONE place (execAdmission), shared with exec.ts's execFiles - they differ
+  // only in the opt-in they pass (execFiles always allows bare-host for trusted
+  // callers and so never reaches this gate on degraded; runCell passes
+  // !untrusted). The cell's `untrusted` is the inverse of the bare-host opt-in:
+  // untrusted work on a tier-less host is refused; untrusted:false is the
+  // explicit "force bare exec" opt-in. (Same condition as before - one authority
+  // for the tier semantics, no behaviour change.)
+  if (execAdmission(tier, !untrusted) === "disabled") {
     return {
       ...base,
       tier,

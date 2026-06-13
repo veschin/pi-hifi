@@ -6,7 +6,7 @@
 // Run: npx tsx eval/exec-selftest.ts
 
 import { runCandidateSelfTest } from "../src/exec.ts";
-import { execAdmission } from "../src/sandbox.ts";
+import { execAdmission, __setSandboxTier } from "../src/sandbox.ts";
 import { defaultConfig, loadConfig } from "../src/config.ts";
 
 function line(label: string, ok: boolean, detail: string): boolean {
@@ -60,6 +60,33 @@ async function main(): Promise<void> {
 
   const nb = await runCandidateSelfTest(noBlocks, 15_000);
   results.push(line("no selftest block -> not run, reason given", !nb.ran && (nb.skippedReason ?? "") !== "", nb.skippedReason ?? "(no reason)"));
+
+  // __setSandboxTier is a guarded test-only hook: it must REFUSE without the env
+  // opt-in (so it cannot flip the security boundary in a normal embed) and work
+  // with it. Run LAST so its cache mutation cannot affect the exec checks above.
+  {
+    let threwWithout = false;
+    try {
+      __setSandboxTier(null);
+    } catch {
+      threwWithout = true;
+    }
+    process.env.APODEX_TEST_HOOKS = "1";
+    let workedWith = true;
+    try {
+      __setSandboxTier(null);
+    } catch {
+      workedWith = false;
+    }
+    delete process.env.APODEX_TEST_HOOKS;
+    results.push(
+      line(
+        "__setSandboxTier guarded (throws without APODEX_TEST_HOOKS)",
+        threwWithout && workedWith,
+        `without=${threwWithout ? "threw" : "RAN(bad)"} with=${workedWith ? "ran" : "threw(bad)"}`,
+      ),
+    );
+  }
 
   const passed = results.every(Boolean);
   console.log(passed ? "EXEC-SELFTEST PASSED: product exec path is sandboxed + stack-agnostic" : "EXEC-SELFTEST FAILED");

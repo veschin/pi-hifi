@@ -61,6 +61,8 @@ async function arm(allowUnsandboxed: boolean): Promise<{ warnings: string[]; ans
 }
 
 async function main(): Promise<void> {
+  // __setSandboxTier is a guarded test-only hook; authorize it for this smoke.
+  process.env.APODEX_TEST_HOOKS = "1";
   const results: boolean[] = [];
 
   console.log("== arm: allowUnsandboxed=false (must DISABLE exec) ==");

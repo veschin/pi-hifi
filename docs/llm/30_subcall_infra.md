@@ -134,12 +134,15 @@ after mode classification): it flips its local `execEnabled` to false on
 flagged "not executed". This closes the prior silent-unsandboxed gap; the
 sandbox tier is the security boundary, the bare-host fallback is not.
 
-**Deferred hardening (opus critic, 2026-06-13)**: the security decision lives in
-TWO places - `execAdmission` (the exec.ts bare-host gate) and `runCell`'s
-degraded-+-`untrusted` refusal (sandbox.ts). `runExperiment` (runner.ts) calls
-the scheduler directly, gated only by the latter (`untrusted` defaults true ->
-degraded refuses), so it fails closed today but is one `untrusted:false` away
-from an ungated path - unify on a single door before wiring it into the pipeline.
-Also `__setSandboxTier` is exported from src/sandbox.ts (a process-global tier
-override, test-only in intent); guard or isolate it before any in-process
-multi-run embed, since it can force `execAdmission`'s view of the tier.
+**Hardening (opus critic, 2026-06-13, DONE)**: the tier -> {sandbox, disabled}
+threshold now lives in ONE place - `execAdmission` - which BOTH `runCell`
+(`execAdmission(tier, !untrusted)`) and exec.ts's `execFiles`
+(`execAdmission(tier, true)`) consult, so the security decision cannot be
+re-implemented inconsistently (they differ only in the opt-in passed; behaviour
+unchanged - the runCell condition is byte-identical to the old
+degraded-+-`untrusted` refusal, opus-verified across all tier×untrusted cases).
+`runExperiment` (runner.ts, eval-only) stays fail-closed (`untrusted` defaults
+true -> degraded refuses). `__setSandboxTier` is now GUARDED: it throws unless
+`APODEX_TEST_HOOKS=1` (selftests set it in-process), so the process-global tier
+override is inert in a normal embed; even a leaked env cannot weaken the boundary
+(forcing a fake `rootless` fails closed when systemd-run/bwrap won't spawn).

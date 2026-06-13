@@ -20,6 +20,7 @@ function line(label: string, ok: boolean, detail: string): boolean {
 }
 
 async function main(): Promise<void> {
+  process.env.APODEX_TEST_HOOKS = "1"; // authorize the guarded __setSandboxTier hook
   const tier = await detectSandbox();
   console.log(`[sandbox] detected tier: ${tier}`);
   const results: boolean[] = [];
