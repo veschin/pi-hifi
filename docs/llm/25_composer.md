@@ -119,6 +119,36 @@ end-to-end), always validateGraph-clean:
 - code, N=1: `gen -> run -> [audit] -> synthesize`
 - non-code: `gen×N -> [judge] -> [audit] -> synthesize`
 
+## decompose (`src/decompose.ts`) - the strong entry
+
+`runDecompose(client, task, composition, opts) -> {graph, plan, source}` turns a
+TRIAGED task into a validated work-graph. Same discipline as triage (invariant
+19 / 1.7): the model fills a FIXED vocabulary, this code decides structure. The
+model's only freedom is DEPTH:
+
+- `candidates` (1..`maxCandidates`): how many independent gen lanes to compare.
+- `with_audit` (bool): insert the `audit` primitive before synthesis.
+
+It NEVER emits raw graph topology and NEVER invents a primitive: deterministic
+`buildGraphFromPlan(plan, mode)` wires the validated catalog DAG
+(`buildCanonicalGraph`) from the depth + the classified mode. `parseDecomposePlan`
+CLAMPS `candidates` into `1..maxCandidates` (the budget envelope) and returns
+null only when there is no usable integer.
+
+Control flow mirrors `runTriage`: one strong call (role `analyst`) + one bounded
+re-ask. **FAIL-SAFE = order MORE, never cheaper**: an unparseable/failed decompose
+returns the robust default plan (`defaultCandidates` + `with_audit:true`), NEVER a
+silent shallow one. Budget exhaustion and abort PROPAGATE (the run stops rather
+than guessing). The "ask the user" escape is triage's `needsDialog`, upstream of
+decompose - decompose itself never pauses.
+
+Rationale for bounded-knobs over a free model-emitted DAG: decompose reliability
+is the dominant risk (architecture §6); a mis-wired DAG (cycle, invented
+primitive, wrong arity) is structurally impossible when the graph is
+catalog-derived. Richer free-form decomposition is deferred until measured to
+help. Tradeoff: the model cannot express task-specific topologies (e.g. per-lane
+gen specs) yet - not needed to prove the canonical chain.
+
 ## Tests (free, no LLM)
 
 - `eval/primitives-selftest.ts` (35 checks): every gate on synthetic
@@ -126,7 +156,11 @@ end-to-end), always validateGraph-clean:
   identity, judge verdict degradation); `execute` paths via a stubbed client
   (gen structural detection, judge tournament determinism, synthesize
   self-heal/footer).
-- `eval/composer-selftest.ts` (19 checks): every `validateGraph` error class +
+- `eval/decompose-selftest.ts` (15 checks): the bounded-depth parser (clamping
+  into the budget envelope), every graph shape validateGraph-clean, and
+  runDecompose control flow (good / re-ask / fail-safe-DEEPER / budget
+  propagation).
+- `eval/composer-selftest.ts` (21 checks): every `validateGraph` error class +
   canonical-graph validity; the executor over the REAL catalog via a stubbed
   client (all-pass hifi, gate-flag-propagate vs skip-on-failed-dep, budget stop,
   checkpoint pause, collect snapshots).
