@@ -55,7 +55,12 @@ interface RawVerdict {
 
 const AXIS_VALUES = ["a", "b", "tie"] as const;
 
-function parseVerdict(text: string): Omit<PairVerdict, "a" | "b"> | null {
+/**
+ * Parse a judge verdict (strict JSON first, per-field regex fallback second).
+ * Exported so the `judge` work-primitive (src/primitives.ts) reuses the exact
+ * same parser the linear selector uses - one judging contract, not two.
+ */
+export function parseVerdict(text: string): Omit<PairVerdict, "a" | "b"> | null {
   // Strict JSON parse first; per-field regex fallback second (a judge once
   // emitted an unescaped quote inside its rationale - the axis verdicts
   // themselves are machine-reliable).
