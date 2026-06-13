@@ -27,7 +27,7 @@ function roadmap(milestones: string[]): Clarification {
 // The non-clarification path reads summary fields + budget; the optional stages
 // (gvr/selection/verification/contextPack/deliveryPlan) are guarded by `if`, so
 // nulls are valid - only budget's numeric fields are dereferenced unconditionally.
-function normalResult(finalAnswer: string): ApodexResult {
+function normalResult(finalAnswer: string, warnings: string[] = []): ApodexResult {
   return {
     runId: "run-test",
     runDir: "/tmp/run-test",
@@ -44,7 +44,7 @@ function normalResult(finalAnswer: string): ApodexResult {
     deliveryPlan: null,
     budget: { subCalls: 5, totalTokens: 1000, inputTokens: 800, outputTokens: 200, costUsd: 0.01, elapsedMs: 12_000, limits: {} },
     budgetExhausted: false,
-    warnings: [],
+    warnings,
   } as unknown as ApodexResult;
 }
 
@@ -98,6 +98,24 @@ async function main(): Promise<void> {
           out.includes("/tmp/run-test/final.md") &&
           /NEXT STEP/.test(out),
         out.split("\n")[0] ?? "(empty)",
+      ),
+    );
+  }
+
+  // critical warning (SECURITY/unsandboxed/disabled) MUST be inlined in full;
+  // routine warnings (role fallbacks) stay as a count - the host model reads text.
+  {
+    const out = composeDelivery(
+      normalResult("export const x = 1;", [
+        "[exec] SECURITY: no sandbox tier detected; candidate self-tests will run UNSANDBOXED on the bare host.",
+        "role analyst: no session model; using default deepseek/deepseek-v4-pro",
+      ]),
+    );
+    r.push(
+      line(
+        "critical warning inlined, routine counted",
+        /WARNING: .*SECURITY.*UNSANDBOXED/.test(out) && out.includes("warnings (non-critical): 1"),
+        out.includes("WARNING:") ? "inlined" : "NOT inlined",
       ),
     );
   }

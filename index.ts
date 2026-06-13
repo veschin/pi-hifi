@@ -32,6 +32,16 @@ function fmtDuration(ms: number): string {
   return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
 }
 
+/**
+ * Warnings the host model MUST see inline (safety, or "what you got changed"),
+ * not merely as a count. Convention: a critical warning carries an UPPERCASE
+ * severity token (SECURITY / UNSANDBOXED / DISABLED). Routine warnings (role
+ * fallbacks, config clamps, context degradations) stay as a count.
+ */
+function isCriticalWarning(w: string): boolean {
+  return /\b(SECURITY|UNSANDBOXED|DISABLED)\b/.test(w);
+}
+
 function summaryLines(result: ApodexResult): string[] {
   const lines = [
     `run: ${result.runId} (mode ${result.mode})`,
@@ -73,7 +83,10 @@ function summaryLines(result: ApodexResult): string[] {
     `spent: $${result.budget.costUsd.toFixed(4)} | ${result.budget.subCalls} sub-calls | tokens ${fmtTokens(result.budget.inputTokens)} in / ${fmtTokens(result.budget.outputTokens)} out | wall ${fmtDuration(result.budget.elapsedMs)}`,
   );
   if (result.budgetExhausted) lines.push("NOTE: budget exhausted - best-so-far answer returned");
-  if (result.warnings.length > 0) lines.push(`warnings: ${result.warnings.length} (see run.json)`);
+  const criticalWarnings = result.warnings.filter(isCriticalWarning);
+  for (const w of criticalWarnings) lines.push(`WARNING: ${w}`);
+  const routineWarnings = result.warnings.length - criticalWarnings.length;
+  if (routineWarnings > 0) lines.push(`warnings (non-critical): ${routineWarnings} (see run.json)`);
   lines.push(`artifacts: ${result.runDir}`);
   return lines;
 }
