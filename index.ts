@@ -154,7 +154,7 @@ function composeClarification(result: ApodexResult): string {
  * preview) + the delivery plan + a NEXT STEP directive on every channel - the
  * caller must act on the result, not archive it.
  */
-function composeDelivery(result: ApodexResult): string {
+export function composeDelivery(result: ApodexResult): string {
   if (result.clarification) return composeClarification(result);
   const header = summaryLines(result).join("\n");
   const answerPath = `${result.runDir}/final.md`;
