@@ -254,6 +254,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
           client,
           task,
           interactive: opts.briefInteractive ?? false,
+          polyglot: opts.config.polyglot,
           onProgress: emitProgress,
         });
         store.writeJson("brief.json", stage);
@@ -380,6 +381,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
         candidates: opts.config.candidates,
         execEnabled,
         execTimeoutMs: opts.config.exec.timeoutMs,
+        polyglot: opts.config.polyglot,
         onProgress: emitProgress,
       });
       store.writeJson("selection.json", selection);
@@ -396,6 +398,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
       mode,
       rounds: opts.config.rounds,
       scoreThreshold: opts.config.scoreThreshold,
+      polyglot: opts.config.polyglot,
       ...(seedAttempt !== undefined ? { seedAttempt } : {}),
       ...(execProbeEnabled
         ? { execProbe: (attempt: string) => runCandidateSelfTest(attempt, opts.config.exec.timeoutMs) }

@@ -173,10 +173,18 @@ Every progress event is `[stage]`-prefixed (`[team] [triage] [context]
   paths, edge cases, boundary validation, swallowed errors, TODO-masking,
   unobserved correctness claims, missing failure modes / rejected
   alternatives (design).
-- Code answers follow the block convention: ```js solution / ```js selftest,
-  selftest imports `./solution.mjs`, covers every stated requirement incl.
+- Code answers follow the fenced block convention `<lang> solution` /
+  `<lang> selftest`; the selftest imports the solution, covers every stated
+  requirement incl.
   abort/error paths, installs process-level leak handlers, exits non-zero on
-  failure. `extractCodeBlocks` (src/exec.ts) parses exactly this convention.
+  failure. **Stack-agnostic by default** (3.5, `config.polyglot`, default on):
+  `generatorSystem(mode, polyglot)` emits the language the task requires; the
+  runnable-language list is derived from `runner.ts` (`runnerHints`, currently
+  js + python) so it cannot drift; languages with no runner ship flagged "not
+  executed" (never refused). With `polyglot` OFF (the eval pin) it forces the
+  legacy `js solution`/`js selftest` (`./solution.mjs`). `parseExperiment`
+  (src/runner.ts) parses any tag; the legacy `extractCodeBlocks` (src/exec.ts,
+  js-only) is used only by the eval scorer (which is JS-pinned).
 - All structured outputs are strict JSON; parsers live in src/json.ts with
   regex fallbacks for machine-reliable fields (see
   [30_subcall_infra.md](30_subcall_infra.md)).

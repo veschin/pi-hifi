@@ -18,7 +18,7 @@
 
 import { asStringArray, extractEnumField, parseJsonLoose } from "./json.ts";
 import type { SubCallClient } from "./llm.ts";
-import { ANALYST_SYSTEM, analystUser } from "./prompts.ts";
+import { analystSystem, analystUser } from "./prompts.ts";
 import type { ProgressFn } from "./types.ts";
 
 export const APPROVED_BRIEF_MARKER = "# Approved brief";
@@ -95,6 +95,8 @@ export interface BriefStageOptions {
   task: string;
   /** True when a chat-mediated user can answer questions / review the brief. */
   interactive: boolean;
+  /** Stack-agnostic scope (3.5); default false = analyst steers toward JS. */
+  polyglot?: boolean;
   onProgress?: ProgressFn;
 }
 
@@ -106,7 +108,7 @@ async function callAnalyst(
   const outcome = await opts.client.call({
     role: "analyst",
     label,
-    systemPrompt: ANALYST_SYSTEM,
+    systemPrompt: analystSystem(opts.polyglot ?? false),
     userText,
   });
   if (!outcome.ok) return { parsed: null, error: outcome.error ?? "analyst call failed" };

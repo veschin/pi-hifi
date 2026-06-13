@@ -198,6 +198,9 @@ async function runPipelineArm(
     brief: { ...config.brief, enabled: false },
     context: { ...config.context, enabled: false },
     delivery: { ...config.delivery, planEnabled: false },
+    // Polyglot OFF (comparability pin): the published runs used the legacy JS
+    // convention and the scorer extracts JS blocks; the eval tasks are JS.
+    polyglot: false,
   };
   try {
     const result = await runApodex({

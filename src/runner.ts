@@ -49,6 +49,17 @@ export function supportedLanguages(): string[] {
   return Object.keys(LANG_RUNNERS);
 }
 
+/**
+ * Per-language guidance for the generator prompt, DERIVED from LANG_RUNNERS so
+ * the prompt can never drift from the actual runners (adding a row below is the
+ * only change needed - the prompt updates itself).
+ */
+export function runnerHints(): string {
+  return Object.entries(LANG_RUNNERS)
+    .map(([lang, r]) => `${lang} (selftest: ${r.importHint}; runs \`${r.argv.join(" ")}\`)`)
+    .join("; ");
+}
+
 export interface ParsedExperiment {
   lang: string;
   runner: LangRunner;

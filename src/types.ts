@@ -87,6 +87,13 @@ export interface ApodexConfig {
   brief: BriefConfig;
   context: ContextConfig;
   delivery: DeliveryConfig;
+  /**
+   * Stack-agnostic code generation (3.5): when true the generator emits the
+   * language the task requires (`<lang> solution`/`<lang> selftest`); when false
+   * it forces the legacy JS convention. Default true; the eval pins it false for
+   * comparability with the published JS runs.
+   */
+  polyglot: boolean;
   /** Base directory for run artifacts (absolute, or relative to cwd). */
   runsDir: string;
 }

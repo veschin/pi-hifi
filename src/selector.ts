@@ -36,6 +36,8 @@ export interface SelectorOptions {
   candidates: number;
   execEnabled: boolean;
   execTimeoutMs: number;
+  /** Stack-agnostic generation (3.5); default false = legacy JS convention. */
+  polyglot?: boolean;
   onProgress?: ProgressFn;
 }
 
@@ -84,7 +86,7 @@ function parseVerdict(text: string): Omit<PairVerdict, "a" | "b"> | null {
 
 async function generateCandidates(opts: SelectorOptions): Promise<Candidate[]> {
   opts.onProgress?.(`[select] generating ${opts.candidates} candidates in parallel`);
-  const system = generatorSystem(opts.mode);
+  const system = generatorSystem(opts.mode, opts.polyglot ?? false);
   const user = generatorUser(opts.task);
 
   // allSettled (not all): every lane is awaited before inspection, so a

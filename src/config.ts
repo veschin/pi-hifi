@@ -50,6 +50,7 @@ export function defaultConfig(): ApodexConfig {
       maxListingEntries: 1_500,
     },
     delivery: { planEnabled: true },
+    polyglot: true,
     runsDir: ".apodex/runs",
   };
 }
@@ -327,6 +328,9 @@ export function loadConfig(opts: LoadConfigOptions): LoadedConfig {
   }
   if (env.APODEX_DELIVERY_PLAN !== undefined) {
     config.delivery.planEnabled = env.APODEX_DELIVERY_PLAN !== "0" && env.APODEX_DELIVERY_PLAN !== "false";
+  }
+  if (env.APODEX_POLYGLOT !== undefined) {
+    config.polyglot = env.APODEX_POLYGLOT !== "0" && env.APODEX_POLYGLOT !== "false";
   }
   if (env.APODEX_TRIAGE_ENABLED !== undefined) {
     config.triage.enabled = env.APODEX_TRIAGE_ENABLED !== "0" && env.APODEX_TRIAGE_ENABLED !== "false";

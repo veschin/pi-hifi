@@ -86,6 +86,12 @@ New blocks (2026-06-12): `context` (enabled, maxRounds 1..4 = 2, maxFiles
 EVERY downstream call's input - with expensive session-bound heavy roles this
 is the dominant marginal cost; cap it via `context.maxTotalBytes`.
 
+`polyglot` (top-level boolean, default TRUE, env `APODEX_POLYGLOT`, 3.5):
+stack-agnostic code generation. ON - the generator emits the language the task
+requires (`<lang> solution`/`<lang> selftest`); OFF - the legacy forced-JS
+convention. The eval pins it OFF for comparability with the published JS runs;
+the product default is ON because a non-JS task otherwise gets JS-tagged blocks.
+
 ## Artifact store (src/store.ts)
 
 Per run: `<runsDir>/<runId>/{config.json, triage.json?, progress.jsonl,
