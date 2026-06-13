@@ -7,7 +7,7 @@
 // Run (free):  npx tsx eval/triage-selftest.ts
 // Run (+live): APODEX_TRIAGE_LIVE=1 npx tsx eval/triage-selftest.ts
 
-import { parseTriage, fallbackPlan, runTriage, megaRoadmapClarification } from "../src/triage.ts";
+import { parseTriage, fallbackPlan, runTriage, megaRoadmapClarification, shouldBackstopDialog } from "../src/triage.ts";
 import { SubCallClient } from "../src/llm.ts";
 import type { SubCallOutcome, SubCallRecord, SubCallRequest } from "../src/types.ts";
 import { loadConfig, defaultConfig, DEFAULT_WORKER_MODEL } from "../src/config.ts";
@@ -346,6 +346,25 @@ async function runFreeTests(): Promise<boolean> {
     const on = loadConfig({ cwd: process.cwd(), env: { APODEX_TRIAGE_ENABLED: "1" } }).config.triage.enabled;
     r.push(
       line("config.triage default on / env toggles", def === true && off === false && on === true, `default=${def} off=${off} on=${on}`),
+    );
+  }
+
+  // shouldBackstopDialog - fires only when brief OFF + interactive + needsDialog.
+  {
+    const dialog = fallbackPlan("x"); // needsDialog=true
+    const noDialog = parseTriage(
+      modelJson({ type: "code", scale: "micro", oracle: "execute", arch_risk: false, needs_dialog: false, confidence: "high", roadmap: [], rationale: "x" }),
+    );
+    r.push(
+      line(
+        "shouldBackstopDialog: only brief-off + interactive + needsDialog",
+        shouldBackstopDialog(dialog, false, true) === true &&
+          shouldBackstopDialog(dialog, true, true) === false && // brief on -> brief handles it
+          shouldBackstopDialog(dialog, false, false) === false && // non-interactive -> proceed
+          shouldBackstopDialog(noDialog, false, true) === false && // confident -> no pause
+          shouldBackstopDialog(null, false, true) === false, // no plan -> no pause
+        `dialog/off/interactive=${shouldBackstopDialog(dialog, false, true)}`,
+      ),
     );
   }
 

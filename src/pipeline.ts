@@ -28,7 +28,7 @@ import {
 } from "./prompts.ts";
 import { runGvr } from "./gvr.ts";
 import { runSelection } from "./selector.ts";
-import { megaRoadmapClarification, runTriage, type CompositionPlan } from "./triage.ts";
+import { megaRoadmapClarification, runTriage, shouldBackstopDialog, type CompositionPlan } from "./triage.ts";
 import { atomsReportText, runVerification } from "./verifier.ts";
 import { RoleResolver, type ModelRegistryLike } from "./roles.ts";
 import { RunStore } from "./store.ts";
@@ -174,6 +174,42 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
   let finalAnswer = "";
   let budgetExhausted = false;
 
+  // Every clarification pause (mega roadmap, brief questions/review, triage
+  // needs-dialog backstop) returns the SAME shape: finalAnswer "", the plan
+  // recorded, run.json persisted. One helper so the three exit points cannot
+  // drift apart. Reads mode/composition/warnings at call time (closure).
+  const clarReturn = (clarification: Clarification): ApodexResult => {
+    const snapshot = budget.snapshot();
+    store.writeJson("run.json", {
+      status: "needs-clarification",
+      runId,
+      clarification,
+      composition,
+      budget: snapshot,
+      warnings,
+      finishedAt: new Date().toISOString(),
+    });
+    return {
+      runId,
+      runDir: store.runDir,
+      task,
+      mode,
+      finalAnswer: "",
+      brief: null,
+      clarification,
+      composition,
+      bestScore: null,
+      gvr: null,
+      selection: null,
+      verification: null,
+      contextPack: null,
+      deliveryPlan: null,
+      budget: snapshot,
+      budgetExhausted: false,
+      warnings,
+    };
+  };
+
   try {
     // --- Stage T: triage (one classification call -> the composition plan) ---
     // Deterministic gate (1.7): the model fills a fixed vocabulary; this code,
@@ -193,39 +229,10 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
         // system, and a misclassified-large task fails toward more work (1.9).
         // `mode` stays provisional on this path (mode classification is skipped);
         // `composition.type` is the authoritative task kind for a mega result.
-        const clarification = megaRoadmapClarification(composition);
-        const snapshot = budget.snapshot();
         emitProgress(
           `[triage] mega task -> returning ${composition.roadmap.length}-milestone roadmap; not solving in one run`,
         );
-        store.writeJson("run.json", {
-          status: "needs-clarification",
-          runId,
-          clarification,
-          composition,
-          budget: snapshot,
-          warnings,
-          finishedAt: new Date().toISOString(),
-        });
-        return {
-          runId,
-          runDir: store.runDir,
-          task,
-          mode,
-          finalAnswer: "",
-          brief: null,
-          clarification,
-          composition,
-          bestScore: null,
-          gvr: null,
-          selection: null,
-          verification: null,
-          contextPack: null,
-          deliveryPlan: null,
-          budget: snapshot,
-          budgetExhausted: false,
-          warnings,
-        };
+        return clarReturn(megaRoadmapClarification(composition));
       }
     } else {
       emitProgress("[triage] disabled by config");
@@ -251,46 +258,17 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
         });
         store.writeJson("brief.json", stage);
         if (stage.kind === "questions" || stage.kind === "brief-review") {
-          const clarification: Clarification = {
-            kind: stage.kind,
-            questions: stage.questions,
-            briefDraft: stage.brief,
-            roadmap: [],
-          };
           emitProgress(
             stage.kind === "questions"
               ? `[brief] paused: ${stage.questions.length} clarification question(s) for the user`
               : "[brief] paused: draft brief awaits user review",
           );
-          const snapshot = budget.snapshot();
-          store.writeJson("run.json", {
-            status: "needs-clarification",
-            runId,
-            clarification,
-            composition,
-            budget: snapshot,
-            warnings,
-            finishedAt: new Date().toISOString(),
+          return clarReturn({
+            kind: stage.kind,
+            questions: stage.questions,
+            briefDraft: stage.brief,
+            roadmap: [],
           });
-          return {
-            runId,
-            runDir: store.runDir,
-            task,
-            mode,
-            finalAnswer: "",
-            brief: null,
-            clarification,
-            composition,
-            bestScore: null,
-            gvr: null,
-            selection: null,
-            verification: null,
-            contextPack: null,
-            deliveryPlan: null,
-            budget: snapshot,
-            budgetExhausted: false,
-            warnings,
-          };
         }
         if (stage.kind === "ready" && stage.brief !== null) {
           briefText = stage.brief;
@@ -305,6 +283,22 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     } else {
       emitProgress("[brief] disabled by config");
     }
+
+    // needs-dialog backstop (1.9): brief is the primary dialog, so this fires
+    // ONLY when brief is OFF, a user is reachable, and triage flagged the task
+    // uncertain - never silently solve an ambiguous task cheap with no ask path.
+    if (shouldBackstopDialog(composition, opts.config.brief.enabled, opts.briefInteractive ?? false)) {
+      emitProgress("[triage] needs-dialog + brief off + interactive: fail-safe pause for scope clarification");
+      return clarReturn({
+        kind: "questions",
+        questions: [
+          `Triage flagged this task as uncertain (${composition?.rationale || "low confidence"}). Restate the goal, hard constraints, and acceptance criteria, then re-invoke.`,
+        ],
+        briefDraft: null,
+        roadmap: [],
+      });
+    }
+
     // A generated brief is SHARED task material (same isolation rule as the
     // context pack: every role sees the identical text). An approved brief
     // already lives verbatim inside the task text itself.
@@ -366,6 +360,14 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
         emitProgress(w);
       }
     }
+
+    // NOTE: triage's `oracle` field is deliberately NOT acted on here. Acting on
+    // oracle=none to pre-skip exec would suppress execution grounding (1.12) on
+    // genuinely-executable tasks whenever triage misclassifies (observed: a cheap
+    // model tagged an off-by-one JS fix oracle=none), and it is redundant - the
+    // exec layer already ships-and-flags non-runnable code (runCandidateSelfTest
+    // -> ran:false + reason). Oracle routing is deferred until repo-suite/bench/
+    // web grounding exists and triage's oracle is trustworthy. See handoff.
 
     // --- Stage 1: candidates + causal selection (code mode with N > 1) ---
     let seedAttempt: string | undefined;

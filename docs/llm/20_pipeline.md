@@ -117,13 +117,23 @@ Every progress event is `[stage]`-prefixed (`[team] [triage] [context]
     stays rejected). FAIL-SAFE: a malformed, low-confidence, or roadmap-less
     `mega` classification is coerced toward `needsDialog` (never a silent cheap
     route); budget/abort propagate, any other failure returns the fail-safe
-    plan. The ONLY acted-on gate in 3.2a is `scale === "mega"`: it early-returns
+    plan. Acted-on gates: (a) `scale === "mega"` early-returns
     `ApodexResult.clarification` of kind `"roadmap"` (slice milestones) with
     `finalAnswer: ""` - the budget guard, so the candidate/GVR/verify pipeline
-    never fires on a whole system - mirroring the brief stage's clarification
-    pause. `composition` is recorded on every post-triage exit path
-    (`triage.json` + `ApodexResult.composition`). The oracle/archRisk/
-    needsDialog gates for non-mega scales are deferred to later increments.
+    never fires on a whole system; (b) `needsDialog` BACKSTOP (3.2b,
+    `shouldBackstopDialog`): when the brief stage is OFF, a chat user is
+    reachable, and triage flagged uncertainty, pause with a `"questions"`
+    clarification - the brief stage is the primary dialog, so this only covers
+    the brief-off case (no double-pause). All three clarification exits (mega,
+    brief, backstop) go through ONE `clarReturn` helper. `composition` is
+    recorded on every post-triage exit path (`triage.json` +
+    `ApodexResult.composition`). DELIBERATELY NOT acted on: `oracle` (3.2b
+    finding) - pre-skipping exec on `oracle=none` would suppress execution
+    grounding (1.12) whenever triage misclassifies (a cheap model tagged an
+    off-by-one JS fix `oracle=none`), and it is redundant since the exec layer
+    already ships-and-flags non-runnable code; deferred until repo-suite/bench/
+    web grounding exists and the oracle is trustworthy. `archRisk` is deferred to
+    the probe stage (3.6).
 
 ## Open questions (brief stage, accepted 2026-06-12 - to revisit)
 

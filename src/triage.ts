@@ -101,6 +101,17 @@ export function megaRoadmapClarification(plan: CompositionPlan): Clarification {
   return { kind: "roadmap", questions: [], briefDraft: null, roadmap: plan.roadmap };
 }
 
+/**
+ * needs-dialog backstop (1.9): the brief stage is the primary dialog. This fires
+ * ONLY when the brief stage is OFF, a chat-mediated user is reachable, and triage
+ * flagged uncertainty - so an ambiguous task is never silently solved cheap when
+ * there is no brief stage to ask. mega already returned earlier, so this is
+ * micro/bounded. Pure for unit-testing.
+ */
+export function shouldBackstopDialog(plan: CompositionPlan | null, briefEnabled: boolean, interactive: boolean): boolean {
+  return !briefEnabled && interactive && plan !== null && plan.needsDialog;
+}
+
 function asBool(v: unknown): boolean | null {
   if (typeof v === "boolean") return v;
   if (v === "true") return true;
