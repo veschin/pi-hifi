@@ -5,15 +5,20 @@ kind: guide
 
 # Handoff
 
-State as of 2026-06-13 (long autonomous session). Branch **feat/sandbox**, ~12
-commits ahead of `main`, NOT pushed, do NOT touch `main`. Product is mid-rename
-to `pi-hifi` (still code-named apodex internally; the rename is the big remaining
-mechanical item - see below). Design target: `docs/pi-hifi-architecture.md`;
+State as of 2026-06-13 (long autonomous session). Branch **feat/sandbox**, ~16
+commits ahead of `main`, NOT pushed, do NOT touch `main`. Product is now
+**pi-hifi** in code: the `/hifi` command (+ `/apodex` legacy alias), the `hifi`
+tool, package.json, `.hifi/runs`, and the `runHifi`/`HifiConfig`/`HifiResult`
+identifiers are renamed; `APODEX_*` env vars + `.apodex.json` are KEPT as compat;
+`apodex` survives as the internal validate+select step name; the GitHub repo
+rename is the user's manual step. Design target: `docs/pi-hifi-architecture.md`;
 per-stage invariants: `20_pipeline.md`.
 
 This session's verified milestones (each: tsc + FREE selftest + live smoke +
 critic + committed):
 ```
+d6a63d6 refactor(rename): runApodex/ApodexConfig/ApodexResult -> Hifi* [2/2]
+0867eeb refactor(rename): pi-hifi product surface (command/tool/package/dir) [1/2]
 68d631e harden(sandbox): single-door exec admission + guard __setSandboxTier
 a4711c3 feat(prompts): stack-agnostic code generation (polyglot), default on
 6a7d846 feat(triage): needsDialog backstop + clarReturn; defer oracle
@@ -33,7 +38,7 @@ e6d3761 feat(pipeline): wire triage into the pipeline; mega -> roadmap
   Selftests skip without the tier; PASS on a tiered host.
 - **Triage** (`src/triage.ts`): one analyst call -> `CompositionPlan
   {type,scale,oracle,archRisk,needsDialog,confidence,roadmap}` (fixed vocabulary,
-  1.7). Fail-safe coercions. Acted-on gates in `runApodex`: `scale==="mega"` ->
+  1.7). Fail-safe coercions. Acted-on gates in `runHifi`: `scale==="mega"` ->
   early-return a `"roadmap"` clarification (budget guard, no solve); `needsDialog`
   BACKSTOP (`shouldBackstopDialog`) -> pause when brief is OFF + interactive +
   uncertain. All clarification exits share one `clarReturn` helper. `oracle` is
@@ -61,15 +66,6 @@ e6d3761 feat(pipeline): wire triage into the pipeline; mega -> roadmap
 
 Honest sizing after this session's analysis - none of these is a safe cram:
 
-- **1.1 Rename apodex -> pi-hifi** (mechanical but LARGE): 32 `APODEX_*` env
-  vars, ~25 source/eval files, 51 `runApodex`/`ApodexConfig`/`ApodexResult`
-  occurrences, the `apodex` tool + `/apodex` command, `.apodex/runs`,
-  package.json, all docs. Needs backward-compat (read both `HIFI_*`/`APODEX_*`,
-  `.hifi.json`/`.apodex.json`, `/hifi`+`/apodex`) and the nuance that `apodex`
-  SURVIVES as the internal validate+select step name (1.1) - so it is NOT a blind
-  s/apodex/hifi/. Best done as a dedicated fresh-context pass, incrementally
-  committed (each slice green), with `grep` for stragglers after. The GitHub repo
-  rename itself is the user's manual step (cannot push).
 - **3.4 / D1 pin generator -> flash** (thesis-core but RISKY without a benchmark):
   generator defaults to SESSION_MODEL today. Flipping it to flash is the
   cheap-workers premise (1.5), BUT the weak-model advantage is CONDITIONAL on an
@@ -99,6 +95,11 @@ Honest sizing after this session's analysis - none of these is a safe cram:
   ship-and-flag. Revisit when repo-suite/bench/web grounding exists.
 - oomKilled heuristic; docker warm-pool (niche); cross-run statelessness;
   README predates analyst/triage/sandbox/polyglot.
+- Rename cosmetic tail: `APODEX_*` env vars still named APODEX (compat; a
+  HIFI_* alias layer is optional, not in the 1.1 scope) and the doc PROSE in
+  some specs (40_extension, 30, 10) still says "apodex" for product-level
+  mentions - a careful per-occurrence sweep (keeping `.apodex.json`/`APODEX_*`/
+  the apodex-step/the Apodex-paper references) is the remaining cosmetic bit.
 
 ## Smoke test (run before touching anything)
 

@@ -168,7 +168,7 @@ beyond the cap hits MemoryMax and OOM-bounds, never the host disk).
 | `SubCallClient` | unchanged - isolated gateway for every model-primitive |
 | `Budget` | unchanged - caps total work-orders + pool spend |
 | `RunStore` | the **collect-point** implementation |
-| `pipeline.ts runApodex` (linear) | the **composer** over the DAG |
+| `pipeline.ts runHifi` (linear) | the **composer** over the DAG |
 | `classifyMode` (4 modes) | the `decompose` primitive (richer) |
 
 Backbone (isolation-by-construction, roles, budget, store) is kept. New: the

@@ -128,7 +128,7 @@ unit-tested in `eval/exec-selftest.ts`): `rootless`/`docker` tier -> run
 sandboxed; no tier + opt-in true -> bare host; no tier + opt-in false ->
 disabled. exec.ts always permits the bare-host fallback (the eval scorer and
 direct callers run TRUSTED code, backward-compatible). The stricter "disabled"
-branch and the LOUD bare-host warning are enforced by `runApodex` (code mode,
+branch and the LOUD bare-host warning are enforced by `runHifi` (code mode,
 after mode classification): it flips its local `execEnabled` to false on
 `disabled`, so selector/GVR/final-selftest all skip exec and the answer ships
 flagged "not executed". This closes the prior silent-unsandboxed gap; the

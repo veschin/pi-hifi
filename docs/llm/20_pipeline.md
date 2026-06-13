@@ -93,7 +93,7 @@ Every progress event is `[stage]`-prefixed (`[team] [triage] [context]
 17. **Brief stage (`src/brief.ts`, 2026-06-12)**: one analyst call (+ one
     bounded re-ask) BEFORE everything else. Outcomes: `questions` /
     `brief-review` pause the run (early return with
-    `ApodexResult.clarification`, run.json status `needs-clarification`,
+    `HifiResult.clarification`, run.json status `needs-clarification`,
     brief.json written, NO final.md/handoff.md); `ready` joins the brief to
     the task as `# Task brief` shared material; `skipped` degrades to a
     warning - the stage must never kill a run. Re-invocation protocol is
@@ -118,7 +118,7 @@ Every progress event is `[stage]`-prefixed (`[team] [triage] [context]
     `mega` classification is coerced toward `needsDialog` (never a silent cheap
     route); budget/abort propagate, any other failure returns the fail-safe
     plan. Acted-on gates: (a) `scale === "mega"` early-returns
-    `ApodexResult.clarification` of kind `"roadmap"` (slice milestones) with
+    `HifiResult.clarification` of kind `"roadmap"` (slice milestones) with
     `finalAnswer: ""` - the budget guard, so the candidate/GVR/verify pipeline
     never fires on a whole system; (b) `needsDialog` BACKSTOP (3.2b,
     `shouldBackstopDialog`): when the brief stage is OFF, a chat user is
@@ -127,7 +127,7 @@ Every progress event is `[stage]`-prefixed (`[team] [triage] [context]
     the brief-off case (no double-pause). All three clarification exits (mega,
     brief, backstop) go through ONE `clarReturn` helper. `composition` is
     recorded on every post-triage exit path (`triage.json` +
-    `ApodexResult.composition`). DELIBERATELY NOT acted on: `oracle` (3.2b
+    `HifiResult.composition`). DELIBERATELY NOT acted on: `oracle` (3.2b
     finding) - pre-skipping exec on `oracle=none` would suppress execution
     grounding (1.12) whenever triage misclassifies (a cheap model tagged an
     off-by-one JS fix `oracle=none`), and it is redundant since the exec layer
