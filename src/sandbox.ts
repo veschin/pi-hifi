@@ -251,6 +251,24 @@ export async function detectSandbox(force = false): Promise<SandboxTier> {
   return cachedTier;
 }
 
+/**
+ * Whether candidate code may run, given the detected tier and the operator's
+ * explicit opt-in to unsandboxed execution:
+ *   "sandbox"   - a real isolation tier exists; run inside it;
+ *   "bare-host" - NO tier; run on the bare host (allowed ONLY by opt-in - the
+ *                 model-generated code then runs with the pipeline's privileges);
+ *   "disabled"  - NO tier and opt-in withheld; refuse to run untrusted code.
+ * Pure decision (no probe) so the security gate is unit-testable without a host
+ * tier. The opt-in (`exec.allowUnsandboxed`) defaults OFF (fail-closed): no tier
+ * means "disabled" unless the operator explicitly opts into bare-host execution,
+ * in which case the pipeline warns loudly on every run.
+ */
+export type ExecAdmission = "sandbox" | "bare-host" | "disabled";
+export function execAdmission(tier: SandboxTier, allowUnsandboxed: boolean): ExecAdmission {
+  if (tier === "rootless" || tier === "docker") return "sandbox";
+  return allowUnsandboxed ? "bare-host" : "disabled";
+}
+
 function writeFiles(dir: string, files: Record<string, string>): string | null {
   for (const name of Object.keys(files)) {
     if (name.includes("..") || path.isAbsolute(name)) return `unsafe file name: ${name}`;

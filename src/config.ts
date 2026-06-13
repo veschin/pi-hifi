@@ -38,7 +38,7 @@ export function defaultConfig(): ApodexConfig {
       subCallTimeoutMs: 360_000,
       subCallMaxRetries: 2,
     },
-    exec: { enabled: true, timeoutMs: 10_000 },
+    exec: { enabled: true, timeoutMs: 10_000, allowUnsandboxed: false },
     triage: { enabled: true },
     brief: { enabled: true },
     context: {
@@ -243,6 +243,7 @@ export function loadConfig(opts: LoadConfigOptions): LoadedConfig {
     if (typeof exec === "object" && exec !== null && !Array.isArray(exec)) {
       const e = exec as Record<string, unknown>;
       if (typeof e.enabled === "boolean") config.exec.enabled = e.enabled;
+      if (typeof e.allowUnsandboxed === "boolean") config.exec.allowUnsandboxed = e.allowUnsandboxed;
       const n = numberFrom(e.timeoutMs);
       if (n !== null) config.exec.timeoutMs = n;
     }
@@ -316,6 +317,10 @@ export function loadConfig(opts: LoadConfigOptions): LoadedConfig {
   }
   if (env.APODEX_EXEC_ENABLED !== undefined) {
     config.exec.enabled = env.APODEX_EXEC_ENABLED !== "0" && env.APODEX_EXEC_ENABLED !== "false";
+  }
+  if (env.APODEX_EXEC_ALLOW_UNSANDBOXED !== undefined) {
+    config.exec.allowUnsandboxed =
+      env.APODEX_EXEC_ALLOW_UNSANDBOXED !== "0" && env.APODEX_EXEC_ALLOW_UNSANDBOXED !== "false";
   }
   if (env.APODEX_CONTEXT_ENABLED !== undefined) {
     config.context.enabled = env.APODEX_CONTEXT_ENABLED !== "0" && env.APODEX_CONTEXT_ENABLED !== "false";

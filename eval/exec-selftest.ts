@@ -6,6 +6,8 @@
 // Run: npx tsx eval/exec-selftest.ts
 
 import { runCandidateSelfTest } from "../src/exec.ts";
+import { execAdmission } from "../src/sandbox.ts";
+import { defaultConfig, loadConfig } from "../src/config.ts";
 
 function line(label: string, ok: boolean, detail: string): boolean {
   console.log(`${ok ? "PASS" : "FAIL"}  ${label}  -  ${detail}`);
@@ -19,6 +21,33 @@ const noBlocks = "Here is a Three.js scene in a single HTML file: <html>...</htm
 
 async function main(): Promise<void> {
   const results: boolean[] = [];
+
+  // --- Pure security gate (execAdmission): no host tier needed. ---
+  results.push(
+    line(
+      "admission rootless/docker -> sandbox",
+      execAdmission("rootless", true) === "sandbox" &&
+        execAdmission("rootless", false) === "sandbox" &&
+        execAdmission("docker", false) === "sandbox",
+      "a real tier ignores the opt-in",
+    ),
+  );
+  results.push(
+    line("admission degraded + opt-in -> bare-host", execAdmission("degraded", true) === "bare-host", "explicit opt-in runs unsandboxed"),
+  );
+  results.push(
+    line("admission degraded - opt-in -> disabled", execAdmission("degraded", false) === "disabled", "no opt-in refuses untrusted code"),
+  );
+
+  // --- config.exec.allowUnsandboxed: default OFF (fail-closed), env toggles. ---
+  {
+    const def = defaultConfig().exec.allowUnsandboxed;
+    const off = loadConfig({ cwd: process.cwd(), env: { APODEX_EXEC_ALLOW_UNSANDBOXED: "0" } }).config.exec.allowUnsandboxed;
+    const on = loadConfig({ cwd: process.cwd(), env: { APODEX_EXEC_ALLOW_UNSANDBOXED: "1" } }).config.exec.allowUnsandboxed;
+    results.push(
+      line("config.exec.allowUnsandboxed default off / env toggles", def === false && off === false && on === true, `default=${def} off=${off} on=${on}`),
+    );
+  }
 
   const np = await runCandidateSelfTest(nodePass, 15_000);
   results.push(line("node selftest PASS -> ran, exit 0", np.ran && np.exitCode === 0, `ran=${np.ran} exit=${np.exitCode}`));

@@ -9,7 +9,7 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { detectSandbox, type CellEvidence } from "./sandbox.ts";
+import { detectSandbox, execAdmission, type CellEvidence } from "./sandbox.ts";
 import { Scheduler, detectCapacity } from "./sandbox-pool.ts";
 import { parseExperiment } from "./runner.ts";
 import type { ExecEvidence } from "./types.ts";
@@ -94,8 +94,12 @@ async function spawnBareHost(files: Record<string, string>, argv: string[], time
 
 /** Run files+argv: sandbox when a tier exists, bare-host fallback otherwise. */
 async function execFiles(files: Record<string, string>, argv: string[], timeoutMs: number): Promise<ExecEvidence> {
-  const tier = await detectSandbox();
-  if (tier === "rootless" || tier === "docker") {
+  // exec.ts always permits the bare-host fallback (backward-compatible for the
+  // eval scorer and any direct caller), so the choice here is only sandbox vs
+  // bare-host. The PRODUCT pipeline enforces the stricter "disabled" gate above
+  // this layer (it never calls exec when admission is disabled by config).
+  const admission = execAdmission(await detectSandbox(), true);
+  if (admission === "sandbox") {
     const sched = await getScheduler();
     const ce = await sched.schedule({ argv, files, limits: { memMaxBytes: SELFTEST_MEM_MAX, wallMs: timeoutMs, outputCapBytes: OUTPUT_CAP_BYTES } });
     return cellToExec(ce);

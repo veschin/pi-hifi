@@ -1,7 +1,7 @@
 ---
 id: subcall-infra
 kind: spec
-touches: src/llm.ts, src/roles.ts, src/budget.ts, src/config.ts, src/store.ts, src/exec.ts, src/json.ts
+touches: src/llm.ts, src/roles.ts, src/budget.ts, src/config.ts, src/store.ts, src/exec.ts, src/sandbox.ts, src/json.ts
 ---
 
 # Sub-call infrastructure contracts
@@ -73,7 +73,11 @@ env `APODEX_TRIAGE_ENABLED`, file `triage.enabled`) - runs the triage
 classifier first; a `mega` classification early-returns the slice roadmap
 instead of solving (see [20_pipeline.md](20_pipeline.md) invariant 19).
 `brief` block: `enabled` (default true, env `APODEX_BRIEF_ENABLED`, file
-`brief.enabled`).
+`brief.enabled`). `exec` block: `enabled` (env `APODEX_EXEC_ENABLED`),
+`timeoutMs`, and `allowUnsandboxed` (default FALSE / fail-closed, env
+`APODEX_EXEC_ALLOW_UNSANDBOXED`, file `exec.allowUnsandboxed`) - the explicit
+opt-in to bare-host execution when no sandbox tier exists (see the exec runner /
+`execAdmission`).
 
 New blocks (2026-06-12): `context` (enabled, maxRounds 1..4 = 2, maxFiles
 1..40 = 16, maxFileBytes = 16 KB, maxTotalBytes = 48 KB, maxListingEntries =
@@ -102,12 +106,34 @@ unescaped quote inside an evidence string) while boolean/enum fields stay
 trustworthy. Use the fallbacks for any new checker; never trust free-text
 fields recovered this way.
 
-## Exec runner (src/exec.ts)
+## Exec runner (src/exec.ts) + sandbox admission (src/sandbox.ts)
 
-`runNodeScript`: temp dir, `node <entry>`, minimal env (`NODE_ENV=test`
-only), hard timeout with SIGTERM->SIGKILL escalation (both timers cancelled on
-settle), 64 KB output caps, path-traversal guard on file names. **All failure
-modes return `ExecEvidence` (skippedReason) - the runner never rejects**; a
-probe must not be able to kill a pipeline. NOT a security sandbox (see
-[10_scope.md](10_scope.md)). `execEvidenceToText` is the single render used
-by judge/grader/auditor prompts.
+`runCandidateSelfTest` / `runNodeScript` route through the real sandbox
+(`src/sandbox.ts`: kernel-enforced cgroup v2 + bwrap isolation) when a tier
+exists, falling back to a bare-host throwaway-tempdir run otherwise
+(`execFiles` -> `execAdmission`). Bare host: minimal env (`NODE_ENV=test`,
+`PATH`), SIGTERM->SIGKILL timeout escalation, 64 KB output caps, path-traversal
+guard. **All failure modes return `ExecEvidence` (skippedReason) - the runner
+never rejects**; a probe must not be able to kill a pipeline.
+`execEvidenceToText` is the single render used by judge/grader/auditor prompts.
+
+**Sandbox admission gate** (`execAdmission(tier, allowUnsandboxed)`, pure +
+unit-tested in `eval/exec-selftest.ts`): `rootless`/`docker` tier -> run
+sandboxed; no tier + opt-in true -> bare host; no tier + opt-in false ->
+disabled. exec.ts always permits the bare-host fallback (the eval scorer and
+direct callers run TRUSTED code, backward-compatible). The stricter "disabled"
+branch and the LOUD bare-host warning are enforced by `runApodex` (code mode,
+after mode classification): it flips its local `execEnabled` to false on
+`disabled`, so selector/GVR/final-selftest all skip exec and the answer ships
+flagged "not executed". This closes the prior silent-unsandboxed gap; the
+sandbox tier is the security boundary, the bare-host fallback is not.
+
+**Deferred hardening (opus critic, 2026-06-13)**: the security decision lives in
+TWO places - `execAdmission` (the exec.ts bare-host gate) and `runCell`'s
+degraded-+-`untrusted` refusal (sandbox.ts). `runExperiment` (runner.ts) calls
+the scheduler directly, gated only by the latter (`untrusted` defaults true ->
+degraded refuses), so it fails closed today but is one `untrusted:false` away
+from an ungated path - unify on a single door before wiring it into the pipeline.
+Also `__setSandboxTier` is exported from src/sandbox.ts (a process-global tier
+override, test-only in intent); guard or isolate it before any in-process
+multi-run embed, since it can force `execAdmission`'s view of the tier.

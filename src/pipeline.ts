@@ -17,6 +17,7 @@ import { extractApprovedBrief, runBriefStage } from "./brief.ts";
 import { contextPackToText, gatherContext } from "./context.ts";
 import { planDelivery, renderHandoff } from "./delivery.ts";
 import { runCandidateSelfTest } from "./exec.ts";
+import { detectSandbox, execAdmission } from "./sandbox.ts";
 import { parseJsonLoose } from "./json.ts";
 import { SubCallClient } from "./llm.ts";
 import {
@@ -344,6 +345,28 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     }
     emitProgress(`[classify] mode: ${mode}`);
 
+    // Sandbox admission gate (code mode): model-generated candidate code runs
+    // only inside the sandbox. With no isolation tier, either run on the BARE
+    // HOST (loud warning - it then has the pipeline's own privileges) or, if the
+    // operator withheld the opt-in, DISABLE self-tests for this run (answers
+    // still ship, flagged "not executed").
+    let execEnabled = opts.config.exec.enabled;
+    if (mode === "code" && execEnabled) {
+      const admission = execAdmission(await detectSandbox(), opts.config.exec.allowUnsandboxed);
+      if (admission === "bare-host") {
+        const w =
+          "[exec] SECURITY: no sandbox tier detected; candidate self-tests will run UNSANDBOXED on the bare host. Install the rootless tier (cgroup v2 + bubblewrap) or set exec.allowUnsandboxed=false to disable.";
+        warnings.push(w);
+        emitProgress(w);
+      } else if (admission === "disabled") {
+        execEnabled = false;
+        const w =
+          '[exec] no sandbox tier and exec.allowUnsandboxed=false; candidate self-tests DISABLED this run (answers ship flagged "not executed").';
+        warnings.push(w);
+        emitProgress(w);
+      }
+    }
+
     // --- Stage 1: candidates + causal selection (code mode with N > 1) ---
     let seedAttempt: string | undefined;
     if (mode === "code" && opts.config.candidates > 1) {
@@ -353,7 +376,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
         task: materials,
         mode,
         candidates: opts.config.candidates,
-        execEnabled: opts.config.exec.enabled,
+        execEnabled,
         execTimeoutMs: opts.config.exec.timeoutMs,
         onProgress: emitProgress,
       });
@@ -363,7 +386,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     }
 
     // --- Stage 2: GVR (with per-round exec probe in code mode) ---
-    const execProbeEnabled = mode === "code" && opts.config.exec.enabled;
+    const execProbeEnabled = mode === "code" && execEnabled;
     emitProgress(`[gvr] stage start: up to ${opts.config.rounds} rounds, early stop at ${opts.config.scoreThreshold}`);
     gvr = await runGvr({
       client,
@@ -408,7 +431,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
           bestExecEvidence = winner.execEvidence;
         }
       }
-      if (!bestExecEvidence && opts.config.exec.enabled) {
+      if (!bestExecEvidence && execEnabled) {
         emitProgress("[exec] running self-test of the final attempt");
         bestExecEvidence = await runCandidateSelfTest(finalAnswer, opts.config.exec.timeoutMs);
         store.writeJson("final-selftest.json", bestExecEvidence);

@@ -71,9 +71,17 @@ export interface ApodexConfig {
   scoreThreshold: number;
   budget: BudgetConfig;
   exec: {
-    /** Run candidate self-tests with node in a tempdir (code mode). */
+    /** Run candidate self-tests (code mode) - sandboxed when a tier exists. */
     enabled: boolean;
     timeoutMs: number;
+    /**
+     * Allow candidate self-tests to run UNSANDBOXED on the bare host when no
+     * isolation tier exists. Default FALSE (secure by default / fail-closed: the
+     * pipeline refuses to run model-generated code without a sandbox, shipping
+     * the answer flagged "not executed"). Set true to opt INTO bare-host
+     * execution on a tier-less host (the pipeline then warns loudly each run).
+     */
+    allowUnsandboxed: boolean;
   };
   triage: TriageConfig;
   brief: BriefConfig;

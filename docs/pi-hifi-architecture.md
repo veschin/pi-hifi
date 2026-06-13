@@ -115,20 +115,29 @@ checklist (one place, audited).
 
 ## 4. Sandbox - pre-warmed pool, host-agnostic (your point 2)
 
-**Abstraction:** `SandboxPool` - a set of **always-warm**, resource-capped,
-fs-confined, no-net-by-default execution cells. The orchestrator **provisions the
-pool in advance** (at session start), sizes it from **detected** host capacity,
-and dispatches many work-units into it (warm = a job is exec-into-a-live-cell +
-a clean workdir, no cold start).
+**Abstraction:** `SandboxPool` - a set of resource-capped, fs-confined,
+no-net-by-default execution cells, sized from **detected** host capacity, with
+admission control dispatching many work-units into it. (Implemented as admission
+control - `cellSem` / `ramReserve` / `gpuSem`, src/sandbox-pool.ts - over per-job
+rootless scopes; the always-warm live-cell pool described below is a docker-tier
+optimization, deprioritized along with that backend.)
 
-**Backends, chosen by `detectSandbox()` at startup (preference order):**
-1. **Container pool (preferred - your idea):** a lightweight pre-built image with
-   the common runtimes baked in; `N` containers kept warm. Native caps:
-   `--memory --cpus --pids-limit --network none --read-only` + a per-job tmpfs
-   workdir, no host FS mount. Docker or Podman, whichever `detect` finds.
-2. **Rootless cells:** `systemd-run --user --scope` (cgroup mem/cpu/pids) `+ bwrap`
-   (fs/net) - for hosts without a usable container daemon. Colder per-job.
-3. **Degraded:** `prlimit + timeout` only - flagged, no isolation boundary.
+**Backends, chosen by `detectSandbox()` at startup. DECISION (2026-06-13): the
+rootless tier is PRIMARY/default; Docker is demoted to a niche backend for
+genuinely docker-specific tasks, not the general path:**
+1. **Rootless cells (PRIMARY - implemented, src/sandbox.ts):** `systemd-run
+   --user --scope` (cgroup v2: MemoryMax / MemorySwapMax / CPUQuota / TasksMax,
+   fully unprivileged) `+ bwrap` (mount + net namespaces). Needs cgroup v2 +
+   bubblewrap + user-slice cpu/memory/pids delegation. Verified: OOM-kill, fs
+   confinement, net isolation, size-capped RAM-backed tmpfs `/work`.
+2. **Docker/Podman (niche, not built):** a pre-built warm image with runtimes
+   baked in (`--memory --cpus --pids-limit --network none --read-only` + tmpfs
+   workdir). Reserved for genuinely docker-specific work; the rootless tier
+   covers the general case, so this backend is deprioritized.
+3. **Degraded:** no isolation boundary - REFUSES untrusted work. The exec layer
+   then either runs on the bare host behind an explicit opt-in
+   (`exec.allowUnsandboxed`, loud SECURITY warning) or disables self-tests; see
+   `execAdmission` in [llm/30_subcall_infra.md](llm/30_subcall_infra.md).
 
 **Scheduler / admission (governs "many models into the pool"):**
 - `cellSem` = pool size `N` (sized to detected cores/RAM) -> caps concurrency.
@@ -143,10 +152,10 @@ kernel-enforced - a job can't grep the host (no FS mount), can't exhaust RAM (ca
 forever (wall timeout). Stack-agnostic: a cell wraps **any argv** - node/python/
 go/browser/`sh -c "<test cmd>"` - so **no language is special**.
 
-**Honest privilege note:** a Docker daemon implies some privilege; rootless
-Docker/Podman or backend #2 cover unprivileged hosts. `io` limits are
-backend-dependent (rootless cgroup may not delegate `io`); disk-thrash is bounded
-instead by the tmpfs-sized workdir.
+**Honest privilege note:** the primary rootless tier is fully unprivileged (no
+daemon). `io` limits may not be delegated to the user cgroup; disk-thrash is
+bounded instead by the size-capped, RAM-backed tmpfs workdir (a `/work` write
+beyond the cap hits MemoryMax and OOM-bounds, never the host disk).
 
 ---
 
