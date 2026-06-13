@@ -149,6 +149,37 @@ catalog-derived. Richer free-form decomposition is deferred until measured to
 help. Tradeoff: the model cannot express task-specific topologies (e.g. per-lane
 gen specs) yet - not needed to prove the canonical chain.
 
+## Pipeline wiring (`src/composer-pipeline.ts`)
+
+`runComposerHifi` is the composer EXECUTION PATH, selected by
+`config.composer.enabled` (default FALSE, env `APODEX_COMPOSER`, file
+`composer.enabled`). `index.ts` dispatches `config.composer.enabled ?
+runComposerHifi : runHifi`; both take the same options and return a `HifiResult`,
+so delivery/clarification rendering is identical downstream.
+
+`runComposerHifi` mirrors runHifi's SHARED front stages (triage with mega
+early-return -> brief with clarification exits -> context -> classify ->
+admission gate), then `decompose -> runComposer -> delivery -> handoff`. It reuses
+the exported stage functions (`runTriage`, `runBriefStage`, `gatherContext`,
+`classifyMode`, `execAdmission`, `planDelivery`, `renderHandoff`). The
+admission-gate policy is byte-faithful to runHifi (fail-closed: no tier +
+`!allowUnsandboxed` -> exec DISABLED, answers ship flagged "not executed");
+`execEnabled` threads into the composer's `PrimitiveContext` so `run` honors it.
+`materials` (invariant 13/18 shared text) is built identically and reaches
+decompose AND the composer's `ctx.task` (so gen/judge/synthesize see the same
+text). `extractFinalAnswer` pulls the deliverable (final answer, else best-so-far
+verdict winner / candidate). Budget: front/decompose budget exhaustion THROWS
+(fail loud if no answer); runComposer's exhaustion is IN-BAND (best-so-far).
+
+**runHifi is UNTOUCHED** (only `classifyMode` is now exported); the eval pins
+`composer:false` for comparability. The front-stage SEQUENCE is duplicated here
+(not yet factored into a shared helper) to keep the eval-pinned linear path at
+zero regression risk during the parallel-paths phase; it collapses when the
+composer replaces the linear middle. KNOWN GAP: a `checkpoint` pause is currently
+surfaced as a warning + best-so-far, NOT returned as a clarification - the
+checkpoint slice must wire the stateless-resume protocol before shipping a
+checkpoint-bearing graph.
+
 ## Tests (free, no LLM)
 
 - `eval/primitives-selftest.ts` (35 checks): every gate on synthetic
@@ -156,11 +187,22 @@ gen specs) yet - not needed to prove the canonical chain.
   identity, judge verdict degradation); `execute` paths via a stubbed client
   (gen structural detection, judge tournament determinism, synthesize
   self-heal/footer).
-- `eval/decompose-selftest.ts` (15 checks): the bounded-depth parser (clamping
-  into the budget envelope), every graph shape validateGraph-clean, and
-  runDecompose control flow (good / re-ask / fail-safe-DEEPER / budget
-  propagation).
-- `eval/composer-selftest.ts` (21 checks): every `validateGraph` error class +
+- `eval/decompose-selftest.ts` (16 checks): the bounded-depth parser (clamping
+  into the budget envelope + truthy coercion), every graph shape
+  validateGraph-clean, and runDecompose control flow (good / re-ask /
+  fail-safe-DEEPER / budget propagation).
+- `eval/composer-selftest.ts` (26 checks): every `validateGraph` error class +
   canonical-graph validity; the executor over the REAL catalog via a stubbed
   client (all-pass hifi, gate-flag-propagate vs skip-on-failed-dep, budget stop,
-  checkpoint pause, collect snapshots).
+  checkpoint pause, collect snapshots, multi-sink fallback); `extractFinalAnswer`
+  best-so-far extraction.
+
+## Live smoke (paid, `eval/smoke-composer.ts`)
+
+Proves the chain end-to-end on a real code task with real models + the real
+rootless sandbox. Two runs: (1) `runComposerHifi` with decompose choosing depth
+(observed: triage code/micro/execute -> decompose N=1 -> gen PASS -> run PASS
+**real exit 0** -> synthesize PASS, hifi=true); (2) a forced N=2 graph exercising
+the full `gen×2 -> run×2 -> judge -> synthesize` (judge picks a winner on real
+sandbox evidence, `sawEvidence=true`). Verified 2026-06-14: 11/11 assertions
+PASS, ~$0.02, ~2 min.

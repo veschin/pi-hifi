@@ -17,6 +17,7 @@ import { Type } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { loadConfig } from "./src/config.ts";
 import { runHifi } from "./src/pipeline.ts";
+import { runComposerHifi } from "./src/composer-pipeline.ts";
 import { truncate } from "./src/llm.ts";
 import type { HifiResult, DeliveryPlan, TaskMode } from "./src/types.ts";
 
@@ -204,7 +205,12 @@ async function execute(
     cwd: ctx.cwd,
     overrides,
   });
-  return runHifi({
+  // The work-primitive composer (config.composer.enabled) is the alternative
+  // execution path; runHifi (the linear middle) stays the default. Both take the
+  // same options shape and return a HifiResult, so delivery/clarification
+  // rendering is identical downstream.
+  const run = config.composer.enabled ? runComposerHifi : runHifi;
+  return run({
     config,
     configWarnings: warnings,
     registry: ctx.modelRegistry,

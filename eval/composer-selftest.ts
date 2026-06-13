@@ -11,9 +11,11 @@ import {
   runComposer,
   validateGraph,
   type ComposerResult,
+  type ExecutedOrder,
   type WorkGraph,
 } from "../src/composer.ts";
-import type { PrimitiveContext } from "../src/primitives.ts";
+import { extractFinalAnswer } from "../src/composer-pipeline.ts";
+import type { Observation, PrimitiveContext } from "../src/primitives.ts";
 import { BudgetExhaustedError } from "../src/budget.ts";
 import { SubCallClient } from "../src/llm.ts";
 import type { SubCallOutcome, SubCallRecord, SubCallRequest, TaskMode } from "../src/types.ts";
@@ -242,6 +244,23 @@ async function main(): Promise<void> {
     );
     const ok = res.budgetExhausted && res.output?.kind === "candidate" && res.outputOrderId === "g1";
     r.push(line("executor: skipped synthesize sink -> output from non-skipped sink", ok, `output=${res.output?.kind} from=${res.outputOrderId}`));
+  }
+
+  // ===== extractFinalAnswer: best-so-far deliverable extraction =====
+  {
+    const cr = (output: Observation | null, orders: ExecutedOrder[]): ComposerResult => ({ orders, output, outputOrderId: null, hifi: false, budgetExhausted: false, paused: null, warnings: [] });
+    const final: Observation = { kind: "final", claim: "", answer: "FINAL ANSWER", preservedSolution: null };
+    const verdict: Observation = { kind: "verdict", claim: "", winnerText: "WINNER TEXT", winnerEvidence: null, tie: false, sawEvidence: false };
+    const candidate: Observation = { kind: "candidate", claim: "", text: "CAND TEXT", codeCandidate: false, selftestPresent: false, runnableLang: null };
+    r.push(line("extractFinalAnswer: final output -> answer", extractFinalAnswer(cr(final, [])) === "FINAL ANSWER", "final"));
+    r.push(line("extractFinalAnswer: verdict output -> winnerText", extractFinalAnswer(cr(verdict, [])) === "WINNER TEXT", "verdict"));
+    // output null (synthesize skipped) -> best-so-far from a non-skipped verdict order.
+    const verdictOrder: ExecutedOrder = { id: "judge", primitive: "judge", observation: verdict, gate: { pass: true, reason: "" }, skipped: false };
+    const skippedSynth: ExecutedOrder = { id: "s", primitive: "synthesize", observation: null, gate: null, skipped: true, skipReason: "budget" };
+    r.push(line("extractFinalAnswer: null output -> best-so-far verdict winner", extractFinalAnswer(cr(null, [verdictOrder, skippedSynth])) === "WINNER TEXT", "best-so-far"));
+    const candOrder: ExecutedOrder = { id: "g0", primitive: "gen", observation: candidate, gate: { pass: true, reason: "" }, skipped: false };
+    r.push(line("extractFinalAnswer: null output -> falls through to candidate", extractFinalAnswer(cr(null, [candOrder])) === "CAND TEXT", "candidate fallback"));
+    r.push(line("extractFinalAnswer: nothing -> empty", extractFinalAnswer(cr(null, [skippedSynth])) === "", "empty"));
   }
 
   const ok = r.every(Boolean);

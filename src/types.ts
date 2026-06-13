@@ -46,6 +46,16 @@ export interface TriageConfig {
   enabled: boolean;
 }
 
+/** Composer path (decompose -> work-primitive DAG) vs the linear runHifi middle. */
+export interface ComposerConfig {
+  /**
+   * Run the work-primitive composer (decompose -> gated parallel DAG) as the
+   * execution path instead of the linear select/GVR/verify/assemble middle.
+   * Default FALSE: runHifi stays the path until the composer reaches parity.
+   */
+  enabled: boolean;
+}
+
 /** Workspace context-gathering stage (scout request-read loop). */
 export interface ContextConfig {
   enabled: boolean;
@@ -87,6 +97,7 @@ export interface HifiConfig {
   brief: BriefConfig;
   context: ContextConfig;
   delivery: DeliveryConfig;
+  composer: ComposerConfig;
   /**
    * Stack-agnostic code generation (3.5): when true the generator emits the
    * language the task requires (`<lang> solution`/`<lang> selftest`); when false

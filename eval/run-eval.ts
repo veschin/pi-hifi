@@ -198,6 +198,9 @@ async function runPipelineArm(
     brief: { ...config.brief, enabled: false },
     context: { ...config.context, enabled: false },
     delivery: { ...config.delivery, planEnabled: false },
+    // Composer OFF (comparability pin): the published runs are the linear runHifi
+    // middle; the composer is a separate execution path measured on its own.
+    composer: { ...config.composer, enabled: false },
     // Polyglot OFF (comparability pin): the published runs used the legacy JS
     // convention and the scorer extracts JS blocks; the eval tasks are JS.
     polyglot: false,

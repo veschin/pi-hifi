@@ -50,6 +50,9 @@ export function defaultConfig(): HifiConfig {
       maxListingEntries: 1_500,
     },
     delivery: { planEnabled: true },
+    // The work-primitive composer is OFF by default: runHifi (the linear middle)
+    // stays the execution path until the composer reaches measured parity.
+    composer: { enabled: false },
     polyglot: true,
     runsDir: ".hifi/runs",
   };
@@ -272,6 +275,11 @@ export function loadConfig(opts: LoadConfigOptions): LoadedConfig {
       const b = brief as Record<string, unknown>;
       if (typeof b.enabled === "boolean") config.brief.enabled = b.enabled;
     }
+    const composer = fileConfig.composer;
+    if (typeof composer === "object" && composer !== null && !Array.isArray(composer)) {
+      const c = composer as Record<string, unknown>;
+      if (typeof c.enabled === "boolean") config.composer.enabled = c.enabled;
+    }
     if (typeof fileConfig.runsDir === "string" && fileConfig.runsDir.trim() !== "") {
       config.runsDir = fileConfig.runsDir;
     }
@@ -337,6 +345,9 @@ export function loadConfig(opts: LoadConfigOptions): LoadedConfig {
   }
   if (env.APODEX_BRIEF_ENABLED !== undefined) {
     config.brief.enabled = env.APODEX_BRIEF_ENABLED !== "0" && env.APODEX_BRIEF_ENABLED !== "false";
+  }
+  if (env.APODEX_COMPOSER !== undefined) {
+    config.composer.enabled = env.APODEX_COMPOSER !== "0" && env.APODEX_COMPOSER !== "false";
   }
   const envContext: Array<[keyof Omit<HifiConfig["context"], "enabled">, string]> = [
     ["maxRounds", "APODEX_CONTEXT_MAX_ROUNDS"],

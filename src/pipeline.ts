@@ -69,7 +69,7 @@ export interface PipelineOptions {
 
 const VALID_MODES: readonly TaskMode[] = ["design", "code", "incident", "general"];
 
-async function classifyMode(client: SubCallClient, task: string, onProgress?: ProgressFn): Promise<TaskMode> {
+export async function classifyMode(client: SubCallClient, task: string, onProgress?: ProgressFn): Promise<TaskMode> {
   const outcome = await client.call({
     role: "worker",
     label: "classify-mode",
