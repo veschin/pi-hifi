@@ -20,11 +20,11 @@ import * as path from "node:path";
 import { Budget } from "../src/budget.ts";
 import { loadConfig } from "../src/config.ts";
 import { SubCallClient } from "../src/llm.ts";
-import { runApodex } from "../src/pipeline.ts";
+import { runHifi } from "../src/pipeline.ts";
 import { generatorSystem, generatorUser } from "../src/prompts.ts";
 import { RoleResolver } from "../src/roles.ts";
 import { RunStore } from "../src/store.ts";
-import type { ApodexConfig, TaskMode } from "../src/types.ts";
+import type { HifiConfig, TaskMode } from "../src/types.ts";
 import { createStandaloneRegistry } from "./standalone.ts";
 import { codeTasks } from "./tasks/code.ts";
 import { designTasks } from "./tasks/design.ts";
@@ -119,7 +119,7 @@ function evalConfig(
   args: CliArgs,
   engine: Engine,
   runsDir: string,
-): { config: ApodexConfig; warnings: string[] } {
+): { config: HifiConfig; warnings: string[] } {
   const { config, warnings } = loadConfig({
     cwd: process.cwd(),
     env: engineEnv(engine),
@@ -143,7 +143,7 @@ function evalConfig(
 
 async function runBaseline(
   task: EvalTask,
-  config: ApodexConfig,
+  config: HifiConfig,
   registry: ReturnType<typeof createStandaloneRegistry>,
   runsDir: string,
 ): Promise<{ answer: string; wallMs: number; subCalls: number; costUsd: number; error?: string }> {
@@ -176,7 +176,7 @@ async function runBaseline(
 
 async function runPipelineArm(
   task: EvalTask,
-  config: ApodexConfig,
+  config: HifiConfig,
   configWarnings: string[],
   registry: ReturnType<typeof createStandaloneRegistry>,
 ): Promise<{ answer: string; wallMs: number; subCalls: number; costUsd: number; error?: string }> {
@@ -186,7 +186,7 @@ async function runPipelineArm(
   // (an uncontrolled confound), and the delivery planner adds calls without
   // touching the answer - both stay OFF so pipeline-vs-baseline isolates the
   // reasoning loop, comparable with the published runs.
-  const pinnedConfig: ApodexConfig = {
+  const pinnedConfig: HifiConfig = {
     ...config,
     // Triage OFF (comparability pin): the published runs predate the triage
     // stage; an extra classification call per task would diverge from them, and
@@ -203,7 +203,7 @@ async function runPipelineArm(
     polyglot: false,
   };
   try {
-    const result = await runApodex({
+    const result = await runHifi({
       config: pinnedConfig,
       configWarnings,
       registry,
@@ -232,7 +232,7 @@ async function runPipelineArm(
 async function scoreAnswer(
   task: EvalTask,
   answer: string,
-  config: ApodexConfig,
+  config: HifiConfig,
   registry: ReturnType<typeof createStandaloneRegistry>,
   runsDir: string,
   arm: string,

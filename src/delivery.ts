@@ -132,7 +132,7 @@ export function renderHandoff(input: HandoffInput): string {
   const plan = input.deliveryPlan;
 
   const lines: string[] = [
-    `# Apodex handoff - ${input.runId}`,
+    `# pi-hifi handoff - ${input.runId}`,
     "",
     `Task (first 300 chars): ${input.task.length > 300 ? `${input.task.slice(0, 300)}...` : input.task}`,
     "",

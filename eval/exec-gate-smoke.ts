@@ -10,7 +10,7 @@
 // Usage: npx tsx eval/exec-gate-smoke.ts
 
 import { loadConfig } from "../src/config.ts";
-import { runApodex } from "../src/pipeline.ts";
+import { runHifi } from "../src/pipeline.ts";
 import { __setSandboxTier } from "../src/sandbox.ts";
 import { createStandaloneRegistry } from "./standalone.ts";
 
@@ -45,7 +45,7 @@ async function arm(allowUnsandboxed: boolean): Promise<{ warnings: string[]; ans
   const registry = createStandaloneRegistry();
   __setSandboxTier("degraded"); // force the no-tier path for this arm
   try {
-    const r = await runApodex({
+    const r = await runHifi({
       config,
       configWarnings: warnings,
       registry,

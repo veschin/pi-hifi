@@ -7,7 +7,7 @@
 // Run: npx tsx eval/delivery-render-selftest.ts
 
 import { composeDelivery } from "../index.ts";
-import type { ApodexResult, Clarification } from "../src/types.ts";
+import type { HifiResult, Clarification } from "../src/types.ts";
 
 function line(label: string, ok: boolean, detail: string): boolean {
   console.log(`${ok ? "PASS" : "FAIL"}  ${label}  -  ${detail}`);
@@ -16,8 +16,8 @@ function line(label: string, ok: boolean, detail: string): boolean {
 
 // composeDelivery routes a clarification result straight to composeClarification,
 // which reads only result.clarification + result.runId - a minimal stub suffices.
-function clarResult(clar: Clarification): ApodexResult {
-  return { runId: "run-test", clarification: clar } as unknown as ApodexResult;
+function clarResult(clar: Clarification): HifiResult {
+  return { runId: "run-test", clarification: clar } as unknown as HifiResult;
 }
 
 function roadmap(milestones: string[]): Clarification {
@@ -27,7 +27,7 @@ function roadmap(milestones: string[]): Clarification {
 // The non-clarification path reads summary fields + budget; the optional stages
 // (gvr/selection/verification/contextPack/deliveryPlan) are guarded by `if`, so
 // nulls are valid - only budget's numeric fields are dereferenced unconditionally.
-function normalResult(finalAnswer: string, warnings: string[] = []): ApodexResult {
+function normalResult(finalAnswer: string, warnings: string[] = []): HifiResult {
   return {
     runId: "run-test",
     runDir: "/tmp/run-test",
@@ -45,7 +45,7 @@ function normalResult(finalAnswer: string, warnings: string[] = []): ApodexResul
     budget: { subCalls: 5, totalTokens: 1000, inputTokens: 800, outputTokens: 200, costUsd: 0.01, elapsedMs: 12_000, limits: {} },
     budgetExhausted: false,
     warnings,
-  } as unknown as ApodexResult;
+  } as unknown as HifiResult;
 }
 
 async function main(): Promise<void> {

@@ -2,7 +2,7 @@
 // the observable result. Usage: npx tsx eval/smoke-pipeline.ts
 
 import { loadConfig } from "../src/config.ts";
-import { runApodex } from "../src/pipeline.ts";
+import { runHifi } from "../src/pipeline.ts";
 import { createStandaloneRegistry } from "./standalone.ts";
 
 const TASK = `Write a JavaScript (ESM) function "chunk(array, size)" that splits an array into
@@ -27,7 +27,7 @@ async function main(): Promise<void> {
 
   const registry = createStandaloneRegistry();
   const t0 = Date.now();
-  const result = await runApodex({
+  const result = await runHifi({
     config,
     configWarnings: warnings,
     registry,

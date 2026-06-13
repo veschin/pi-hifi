@@ -9,7 +9,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { loadConfig } from "../src/config.ts";
-import { runApodex } from "../src/pipeline.ts";
+import { runHifi } from "../src/pipeline.ts";
 import { createStandaloneRegistry } from "./standalone.ts";
 
 const TASK = `Using the workspace files, explain how this project extracts JSON from LLM
@@ -38,7 +38,7 @@ async function main(): Promise<void> {
   const progress: string[] = [];
   const registry = createStandaloneRegistry();
   const t0 = Date.now();
-  const result = await runApodex({
+  const result = await runHifi({
     config,
     configWarnings: warnings,
     registry,

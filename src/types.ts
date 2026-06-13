@@ -61,7 +61,7 @@ export interface ContextConfig {
   maxListingEntries: number;
 }
 
-export interface ApodexConfig {
+export interface HifiConfig {
   roles: Record<RoleName, RoleSpec>;
   /** K - GVR rounds (grade cycles), clamped to 1..10. */
   rounds: number;
@@ -304,7 +304,7 @@ export interface Clarification {
 
 // --- Pipeline ---
 
-export interface ApodexResult {
+export interface HifiResult {
   runId: string;
   runDir: string;
   task: string;

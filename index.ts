@@ -16,9 +16,9 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { Type } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { loadConfig } from "./src/config.ts";
-import { runApodex } from "./src/pipeline.ts";
+import { runHifi } from "./src/pipeline.ts";
 import { truncate } from "./src/llm.ts";
-import type { ApodexResult, DeliveryPlan, TaskMode } from "./src/types.ts";
+import type { HifiResult, DeliveryPlan, TaskMode } from "./src/types.ts";
 
 const MODE_VALUES = ["auto", "design", "code", "incident", "general"] as const;
 
@@ -43,7 +43,7 @@ function isCriticalWarning(w: string): boolean {
   return /\b(SECURITY|UNSANDBOXED|DISABLED)\b/.test(w);
 }
 
-function summaryLines(result: ApodexResult): string[] {
+function summaryLines(result: HifiResult): string[] {
   const lines = [
     `run: ${result.runId} (mode ${result.mode})`,
     `best grader score: ${result.bestScore ?? "n/a"}/100`,
@@ -134,7 +134,7 @@ function nextStepDirective(plan: DeliveryPlan | null, answerPath: string): strin
  * ORIGINAL task under the documented section heading. State lives entirely in
  * chat text - the paused run is closed.
  */
-function composeClarification(result: ApodexResult): string {
+function composeClarification(result: HifiResult): string {
   const c = result.clarification;
   if (!c) return "";
   if (c.kind === "questions") {
@@ -168,7 +168,7 @@ function composeClarification(result: ApodexResult): string {
  * preview) + the delivery plan + a NEXT STEP directive on every channel - the
  * caller must act on the result, not archive it.
  */
-export function composeDelivery(result: ApodexResult): string {
+export function composeDelivery(result: HifiResult): string {
   if (result.clarification) return composeClarification(result);
   const header = summaryLines(result).join("\n");
   const answerPath = `${result.runDir}/final.md`;
@@ -199,12 +199,12 @@ async function execute(
   ctx: ExtensionContext,
   signal: AbortSignal | undefined,
   onProgress: (message: string) => void,
-): Promise<ApodexResult> {
+): Promise<HifiResult> {
   const { config, warnings } = loadConfig({
     cwd: ctx.cwd,
     overrides,
   });
-  return runApodex({
+  return runHifi({
     config,
     configWarnings: warnings,
     registry: ctx.modelRegistry,

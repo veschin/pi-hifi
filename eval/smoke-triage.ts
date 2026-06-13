@@ -7,7 +7,7 @@
 // Usage: npx tsx eval/smoke-triage.ts
 
 import { loadConfig } from "../src/config.ts";
-import { runApodex } from "../src/pipeline.ts";
+import { runHifi } from "../src/pipeline.ts";
 import { createStandaloneRegistry } from "./standalone.ts";
 
 const MEGA_TASK =
@@ -53,7 +53,7 @@ async function main(): Promise<void> {
 
   // --- MEGA arm: must early-return a roadmap, must NOT solve. ---
   console.log("== MEGA arm ==");
-  const mega = await runApodex({
+  const mega = await runHifi({
     config,
     configWarnings: warnings,
     registry,
@@ -72,7 +72,7 @@ async function main(): Promise<void> {
 
   // --- MICRO arm: must proceed past triage to a real answer. ---
   console.log("== MICRO arm ==");
-  const micro = await runApodex({
+  const micro = await runHifi({
     config,
     configWarnings: warnings,
     registry,

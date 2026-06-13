@@ -8,7 +8,7 @@
 // Usage: npx tsx eval/smoke-polyglot.ts
 
 import { loadConfig } from "../src/config.ts";
-import { runApodex } from "../src/pipeline.ts";
+import { runHifi } from "../src/pipeline.ts";
 import { detectSandbox } from "../src/sandbox.ts";
 import { createStandaloneRegistry } from "./standalone.ts";
 
@@ -49,7 +49,7 @@ async function main(): Promise<void> {
   console.log(`[polyglot] config.polyglot = ${config.polyglot}`);
 
   const registry = createStandaloneRegistry();
-  const result = await runApodex({
+  const result = await runHifi({
     config,
     configWarnings: warnings,
     registry,

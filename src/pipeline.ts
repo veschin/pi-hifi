@@ -34,8 +34,8 @@ import { RoleResolver, type ModelRegistryLike } from "./roles.ts";
 import { RunStore } from "./store.ts";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type {
-  ApodexConfig,
-  ApodexResult,
+  HifiConfig,
+  HifiResult,
   Clarification,
   ContextPack,
   DeliveryPlan,
@@ -49,7 +49,7 @@ import type {
 } from "./types.ts";
 
 export interface PipelineOptions {
-  config: ApodexConfig;
+  config: HifiConfig;
   configWarnings: string[];
   registry: ModelRegistryLike;
   sessionModel?: Model<Api>;
@@ -108,7 +108,7 @@ async function rosterLine(resolver: RoleResolver, roles: readonly RoleName[]): P
   return parts.join(" ");
 }
 
-export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
+export async function runHifi(opts: PipelineOptions): Promise<HifiResult> {
   const task = opts.task.trim();
   if (task === "") {
     throw new Error("apodex: task must be a non-empty string");
@@ -178,7 +178,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
   // needs-dialog backstop) returns the SAME shape: finalAnswer "", the plan
   // recorded, run.json persisted. One helper so the three exit points cannot
   // drift apart. Reads mode/composition/warnings at call time (closure).
-  const clarReturn = (clarification: Clarification): ApodexResult => {
+  const clarReturn = (clarification: Clarification): HifiResult => {
     const snapshot = budget.snapshot();
     store.writeJson("run.json", {
       status: "needs-clarification",
@@ -522,7 +522,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     }
   }
 
-  const result: ApodexResult = {
+  const result: HifiResult = {
     runId,
     runDir: store.runDir,
     task,

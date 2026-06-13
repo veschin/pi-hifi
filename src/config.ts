@@ -4,7 +4,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { ApodexConfig, RoleName, RoleSpec } from "./types.ts";
+import type { HifiConfig, RoleName, RoleSpec } from "./types.ts";
 
 export const SESSION_MODEL = "session";
 export const DEFAULT_HEAVY_MODEL = "deepseek/deepseek-v4-pro";
@@ -12,7 +12,7 @@ export const DEFAULT_WORKER_MODEL = "deepseek/deepseek-v4-flash";
 
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
 
-export function defaultConfig(): ApodexConfig {
+export function defaultConfig(): HifiConfig {
   return {
     roles: {
       analyst: { model: SESSION_MODEL, thinking: "high", temperature: 0.2, maxTokens: 8192 },
@@ -188,11 +188,11 @@ export interface LoadConfigOptions {
   cwd: string;
   env?: NodeJS.ProcessEnv;
   /** Inline overrides (e.g. tool params), applied last. */
-  overrides?: Partial<Pick<ApodexConfig, "rounds" | "candidates">>;
+  overrides?: Partial<Pick<HifiConfig, "rounds" | "candidates">>;
 }
 
 export interface LoadedConfig {
-  config: ApodexConfig;
+  config: HifiConfig;
   warnings: string[];
 }
 
@@ -293,7 +293,7 @@ export function loadConfig(opts: LoadConfigOptions): LoadedConfig {
       explicitModelRoles.add(role);
     }
   }
-  const envNum: Array<[keyof Pick<ApodexConfig, "rounds" | "candidates" | "scoreThreshold">, string]> = [
+  const envNum: Array<[keyof Pick<HifiConfig, "rounds" | "candidates" | "scoreThreshold">, string]> = [
     ["rounds", "APODEX_ROUNDS"],
     ["candidates", "APODEX_CANDIDATES"],
     ["scoreThreshold", "APODEX_SCORE_THRESHOLD"],
@@ -303,7 +303,7 @@ export function loadConfig(opts: LoadConfigOptions): LoadedConfig {
     if (n !== null) config[key] = n;
     else if (env[envKey] !== undefined) warnings.push(`config(${envKey}): not a number; ignored`);
   }
-  const envBudget: Array<[keyof ApodexConfig["budget"], string]> = [
+  const envBudget: Array<[keyof HifiConfig["budget"], string]> = [
     ["maxSubCalls", "APODEX_MAX_SUBCALLS"],
     ["maxTotalTokens", "APODEX_MAX_TOTAL_TOKENS"],
     ["maxCostUsd", "APODEX_MAX_COST_USD"],
@@ -338,7 +338,7 @@ export function loadConfig(opts: LoadConfigOptions): LoadedConfig {
   if (env.APODEX_BRIEF_ENABLED !== undefined) {
     config.brief.enabled = env.APODEX_BRIEF_ENABLED !== "0" && env.APODEX_BRIEF_ENABLED !== "false";
   }
-  const envContext: Array<[keyof Omit<ApodexConfig["context"], "enabled">, string]> = [
+  const envContext: Array<[keyof Omit<HifiConfig["context"], "enabled">, string]> = [
     ["maxRounds", "APODEX_CONTEXT_MAX_ROUNDS"],
     ["maxFiles", "APODEX_CONTEXT_MAX_FILES"],
     ["maxFileBytes", "APODEX_CONTEXT_MAX_FILE_BYTES"],
