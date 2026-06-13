@@ -22,6 +22,8 @@ published at https://github.com/veschin/pi-apodex.
   capability.
 - `docs/llm/20_pipeline.md` - stage invariants; read before touching
   src/{pipeline,gvr,selector,verifier,prompts,context,delivery}.ts.
+- `docs/llm/25_composer.md` - work-primitive layer + composer (the designed
+  core); read before touching src/{primitives,composer,decompose}.ts.
 - `docs/llm/30_subcall_infra.md` - sub-call/retry/budget/config/store
   contracts; read before touching src/{llm,roles,budget,config,store,exec,json}.ts.
 - `docs/llm/40_extension.md` - pi integration + packaging facts (jiti
