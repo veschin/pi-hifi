@@ -1,11 +1,12 @@
-// pi-apodex - verification-centric deep-reasoning extension for Pi.
+// pi-hifi - verification-centric inference-time reasoning extension for Pi.
 //
 // Registers:
-//   tool  `apodex`        - the active model can delegate a hard task to the
-//                           verification pipeline (GVR + external verifier +
-//                           causal candidate selection for code);
-//   cmd   /apodex <task>  - run the pipeline directly from the prompt;
-//   cmd   /apodex-config  - show the effective configuration.
+//   tool  `hifi`          - the active model can delegate a hard task to the
+//                           verification pipeline (triage -> GVR + external
+//                           verifier + causal candidate selection for code);
+//   cmd   /hifi <task>    - run the pipeline directly from the prompt
+//                           (/apodex is kept as a legacy alias);
+//   cmd   /hifi-config    - show the effective configuration (/apodex-config alias).
 //
 // Provider-agnostic: heavy roles default to the session's active model; the
 // cheap worker role defaults to deepseek-v4-flash. Every role is overridable
@@ -129,7 +130,7 @@ function nextStepDirective(plan: DeliveryPlan | null, answerPath: string): strin
 /**
  * Clarification contract: the run paused BEFORE any solution work and needs
  * the user. The calling model must relay questions / the draft brief to the
- * user verbatim and re-invoke apodex with the user's input appended to the
+ * user verbatim and re-invoke the hifi tool with the user's input appended to the
  * ORIGINAL task under the documented section heading. State lives entirely in
  * chat text - the paused run is closed.
  */
@@ -138,9 +139,9 @@ function composeClarification(result: ApodexResult): string {
   if (!c) return "";
   if (c.kind === "questions") {
     return [
-      `apodex paused for clarification (run ${result.runId}) - the task analyst is blocked:`,
+      `pi-hifi paused for clarification (run ${result.runId}) - the task analyst is blocked:`,
       c.questions.map((q, i) => `${i + 1}. ${q}`).join("\n"),
-      `NEXT STEP: relay these questions to the user VERBATIM and wait for the answers - do not answer them yourself. Then invoke apodex again with the ORIGINAL task text plus a "# Clarification answers" section containing the numbered answers.`,
+      `NEXT STEP: relay these questions to the user VERBATIM and wait for the answers - do not answer them yourself. Then invoke the hifi tool again with the ORIGINAL task text plus a "# Clarification answers" section containing the numbered answers.`,
     ].join("\n\n");
   }
   if (c.kind === "roadmap") {
@@ -149,15 +150,15 @@ function composeClarification(result: ApodexResult): string {
         ? c.roadmap.map((m, i) => `${i + 1}. ${m}`).join("\n")
         : "(triage produced no slice plan - the task must be split by hand)";
     return [
-      `apodex classified this as a LARGE (mega) task (run ${result.runId}) - it is not solved in one pass. Slice roadmap:`,
+      `pi-hifi classified this as a LARGE (mega) task (run ${result.runId}) - it is not solved in one pass. Slice roadmap:`,
       milestones,
-      `NEXT STEP: present this roadmap to the user and ask which milestone to tackle first (or to narrow the task). Then invoke apodex again on that ONE slice as a self-contained task - it runs the full verification pipeline on the bounded slice. Do not attempt the whole system in one run.`,
+      `NEXT STEP: present this roadmap to the user and ask which milestone to tackle first (or to narrow the task). Then invoke the hifi tool again on that ONE slice as a self-contained task - it runs the full verification pipeline on the bounded slice. Do not attempt the whole system in one run.`,
     ].join("\n\n");
   }
   return [
-    `apodex composed a task brief for review (run ${result.runId}) - the pipeline is paused until the user approves it:`,
+    `pi-hifi composed a task brief for review (run ${result.runId}) - the pipeline is paused until the user approves it:`,
     c.briefDraft ?? "(brief draft missing - see brief.json)",
-    `NEXT STEP: present this brief to the user for correction or approval - do not approve it yourself. Then invoke apodex again with the ORIGINAL task text plus the (possibly user-edited) brief under a "# Approved brief" heading; the pipeline will run without re-deriving it.`,
+    `NEXT STEP: present this brief to the user for correction or approval - do not approve it yourself. Then invoke the hifi tool again with the ORIGINAL task text plus the (possibly user-edited) brief under a "# Approved brief" heading; the pipeline will run without re-deriving it.`,
   ].join("\n\n");
 }
 
@@ -221,8 +222,8 @@ async function execute(
 
 export default function (pi: ExtensionAPI) {
   pi.registerTool({
-    name: "apodex",
-    label: "Apodex",
+    name: "hifi",
+    label: "Hifi",
     description:
       "Delegate a hard engineering task (system design, non-trivial code, incident diagnosis) to a verification-centric reasoning pipeline: a task analyst elaborates the task into a brief first (it may PAUSE the run and return clarification questions or a draft brief for user review - relay them to the user verbatim and re-invoke with the answers / approved brief appended exactly as the result instructs), then a scout stage gathers read-only workspace context (file listing + targeted reads), then parallel candidates with execution evidence, generate->verify->revise loops with an independent grader, external claim-by-claim verification, and an evidence-disciplined final answer with a delivery plan. The pipeline produces a VERIFIED ANSWER plus apply steps, not workspace changes: the answer is saved to <runDir>/final.md (plan: handoff.md) and the result carries a NEXT STEP - execute the apply steps yourself when the user asked for implementation. Costs multiple model sub-calls; use for tasks where single-pass answers are unreliable, not for trivial questions.",
     parameters: Type.Object({
@@ -288,7 +289,7 @@ export default function (pi: ExtensionAPI) {
           content: [
             {
               type: "text",
-              text: `apodex pipeline failed: ${message}\nProgress so far:\n${progress.join("\n") || "(none)"}`,
+              text: `pi-hifi pipeline failed: ${message}\nProgress so far:\n${progress.join("\n") || "(none)"}`,
             },
           ],
           details: { error: message },
@@ -298,100 +299,107 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerCommand("apodex", {
-    description: "Run the apodex verification pipeline on a task: /apodex <task text>",
-    handler: async (args, ctx) => {
-      const task = (args ?? "").trim();
-      if (task === "") {
-        if (ctx.hasUI) ctx.ui.notify("Usage: /apodex <task text>", "warning");
-        return;
-      }
-      // Visible launch echo: a slash command consumes the input line, so
-      // without this the chat shows nothing until the pipeline finishes
-      // minutes later and the run looks dead.
+  // Shared handler registered under /hifi (primary) and /apodex (legacy alias).
+  const runHandler = async (args: string | undefined, ctx: ExtensionContext): Promise<void> => {
+    const task = (args ?? "").trim();
+    if (task === "") {
+      if (ctx.hasUI) ctx.ui.notify("Usage: /hifi <task text>", "warning");
+      return;
+    }
+    // Visible launch echo: a slash command consumes the input line, so without
+    // this the chat shows nothing until the pipeline finishes minutes later.
+    pi.sendMessage(
+      {
+        customType: "hifi-progress",
+        content: `pi-hifi run started\ntask: ${truncate(task, 160)}\nThe pipeline runs for minutes (progress in the widget above the editor and in the status bar); the result will arrive here as a message.`,
+        display: true,
+      },
+      { triggerTurn: false },
+    );
+    if (ctx.hasUI) ctx.ui.setStatus("hifi", "hifi: starting");
+    const recentProgress: string[] = [];
+    try {
+      const result = await execute(
+        task,
+        "auto",
+        {},
+        ctx,
+        undefined,
+        (message) => {
+          if (!ctx.hasUI) return;
+          ctx.ui.setStatus("hifi", `hifi: ${truncate(message, 80)}`);
+          recentProgress.push(truncate(message, 100));
+          ctx.ui.setWidget("hifi", ["pi-hifi pipeline:", ...recentProgress.slice(-4)]);
+        },
+      );
+      // triggerTurn: the session model wakes up on the result and finishes the
+      // job (executes the apply steps / relays clarification) instead of the run
+      // dead-ending as a wall of text in the chat.
       pi.sendMessage(
         {
-          customType: "apodex-progress",
-          content: `apodex run started\ntask: ${truncate(task, 160)}\nThe pipeline runs for minutes (progress in the widget above the editor and in the status bar); the result will arrive here as a message.`,
+          customType: result.clarification ? "hifi-clarification" : "hifi-result",
+          content: `pi-hifi ${result.clarification ? "clarification needed" : "result"} (${result.runId})\n${composeDelivery(result)}`,
+          display: true,
+          details: {
+            runDir: result.runDir,
+            finalAnswerPath: `${result.runDir}/final.md`,
+            handoffPath: `${result.runDir}/handoff.md`,
+          },
+        },
+        { triggerTurn: true },
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (ctx.hasUI) ctx.ui.notify(`pi-hifi failed: ${truncate(message, 200)}`, "error");
+      pi.sendMessage(
+        {
+          customType: "hifi-result",
+          content: `pi-hifi run FAILED: ${truncate(message, 300)}`,
           display: true,
         },
         { triggerTurn: false },
       );
-      if (ctx.hasUI) ctx.ui.setStatus("apodex", "apodex: starting");
-      const recentProgress: string[] = [];
-      try {
-        const result = await execute(
-          task,
-          "auto",
-          {},
-          ctx,
-          undefined,
-          (message) => {
-            if (!ctx.hasUI) return;
-            ctx.ui.setStatus("apodex", `apodex: ${truncate(message, 80)}`);
-            recentProgress.push(truncate(message, 100));
-            ctx.ui.setWidget("apodex", ["apodex pipeline:", ...recentProgress.slice(-4)]);
-          },
-        );
-        // triggerTurn: the session model wakes up on the result and finishes
-        // the job (executes the apply steps / presents the key points / relays
-        // clarification questions) instead of the run dead-ending as a wall of
-        // text in the chat.
-        pi.sendMessage(
-          {
-            customType: result.clarification ? "apodex-clarification" : "apodex-result",
-            content: `apodex ${result.clarification ? "clarification needed" : "result"} (${result.runId})\n${composeDelivery(result)}`,
-            display: true,
-            details: {
-              runDir: result.runDir,
-              finalAnswerPath: `${result.runDir}/final.md`,
-              handoffPath: `${result.runDir}/handoff.md`,
-            },
-          },
-          { triggerTurn: true },
-        );
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (ctx.hasUI) ctx.ui.notify(`apodex failed: ${truncate(message, 200)}`, "error");
-        pi.sendMessage(
-          {
-            customType: "apodex-result",
-            content: `apodex run FAILED: ${truncate(message, 300)}`,
-            display: true,
-          },
-          { triggerTurn: false },
-        );
-      } finally {
-        if (ctx.hasUI) {
-          ctx.ui.setStatus("apodex", "");
-          ctx.ui.setWidget("apodex", []);
-        }
+    } finally {
+      if (ctx.hasUI) {
+        ctx.ui.setStatus("hifi", "");
+        ctx.ui.setWidget("hifi", []);
       }
-    },
+    }
+  };
+  pi.registerCommand("hifi", {
+    description: "Run the pi-hifi verification pipeline on a task: /hifi <task text>",
+    handler: runHandler,
+  });
+  pi.registerCommand("apodex", {
+    description: "Alias of /hifi (legacy name).",
+    handler: runHandler,
   });
 
+  const configHandler = async (_args: string | undefined, ctx: ExtensionContext): Promise<void> => {
+    const { config, warnings } = loadConfig({ cwd: ctx.cwd });
+    const sessionModel = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : "(none)";
+    const text = [
+      `session model: ${sessionModel}`,
+      `roles: ${JSON.stringify(config.roles, null, 2)}`,
+      `rounds=${config.rounds} candidates=${config.candidates} scoreThreshold=${config.scoreThreshold}`,
+      `budget: ${JSON.stringify(config.budget)}`,
+      `exec: ${JSON.stringify(config.exec)}`,
+      `triage: ${JSON.stringify(config.triage)}`,
+      `brief: ${JSON.stringify(config.brief)}`,
+      `context: ${JSON.stringify(config.context)}`,
+      `delivery: ${JSON.stringify(config.delivery)}`,
+      `polyglot: ${config.polyglot}`,
+      `runsDir: ${config.runsDir}`,
+      warnings.length > 0 ? `warnings:\n${warnings.map((w) => `- ${w}`).join("\n")}` : "warnings: none",
+    ].join("\n");
+    pi.sendMessage({ customType: "hifi-config", content: text, display: true }, { triggerTurn: false });
+  };
+  pi.registerCommand("hifi-config", {
+    description: "Show the effective pi-hifi configuration and where it came from",
+    handler: configHandler,
+  });
   pi.registerCommand("apodex-config", {
-    description: "Show the effective apodex configuration and where it came from",
-    handler: async (_args, ctx) => {
-      const { config, warnings } = loadConfig({ cwd: ctx.cwd });
-      const sessionModel = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : "(none)";
-      const text = [
-        `session model: ${sessionModel}`,
-        `roles: ${JSON.stringify(config.roles, null, 2)}`,
-        `rounds=${config.rounds} candidates=${config.candidates} scoreThreshold=${config.scoreThreshold}`,
-        `budget: ${JSON.stringify(config.budget)}`,
-        `exec: ${JSON.stringify(config.exec)}`,
-        `triage: ${JSON.stringify(config.triage)}`,
-        `brief: ${JSON.stringify(config.brief)}`,
-        `context: ${JSON.stringify(config.context)}`,
-        `delivery: ${JSON.stringify(config.delivery)}`,
-        `runsDir: ${config.runsDir}`,
-        warnings.length > 0 ? `warnings:\n${warnings.map((w) => `- ${w}`).join("\n")}` : "warnings: none",
-      ].join("\n");
-      pi.sendMessage(
-        { customType: "apodex-config", content: text, display: true },
-        { triggerTurn: false },
-      );
-    },
+    description: "Alias of /hifi-config (legacy name).",
+    handler: configHandler,
   });
 }

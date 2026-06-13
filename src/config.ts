@@ -51,7 +51,7 @@ export function defaultConfig(): ApodexConfig {
     },
     delivery: { planEnabled: true },
     polyglot: true,
-    runsDir: ".apodex/runs",
+    runsDir: ".hifi/runs",
   };
 }
 
