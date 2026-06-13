@@ -27,6 +27,7 @@ import {
 } from "./prompts.ts";
 import { runGvr } from "./gvr.ts";
 import { runSelection } from "./selector.ts";
+import { megaRoadmapClarification, runTriage, type CompositionPlan } from "./triage.ts";
 import { atomsReportText, runVerification } from "./verifier.ts";
 import { RoleResolver, type ModelRegistryLike } from "./roles.ts";
 import { RunStore } from "./store.ts";
@@ -159,6 +160,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
   // Provisional mode; refined by classification inside the try so a mid-run
   // budget stop never erases an already-classified mode.
   let mode: TaskMode = opts.mode === "auto" ? "general" : opts.mode;
+  let composition: CompositionPlan | null = null;
   let briefText: string | null = null;
   let briefSource: "approved" | "generated" | null = null;
   // Task text + generated brief; reused after the try for handoff rendering.
@@ -172,6 +174,62 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
   let budgetExhausted = false;
 
   try {
+    // --- Stage T: triage (one classification call -> the composition plan) ---
+    // Deterministic gate (1.7): the model fills a fixed vocabulary; this code,
+    // not the model, decides what runs. 3.2a acts on the SCALE knob only - the
+    // oracle/archRisk/needsDialog gates land in later increments.
+    if (opts.config.triage.enabled) {
+      emitProgress("[triage] classifying the task into a composition plan");
+      composition = await runTriage(client, task, emitProgress);
+      store.writeJson("triage.json", composition);
+      emitProgress(
+        `[triage] type=${composition.type} scale=${composition.scale} oracle=${composition.oracle} archRisk=${composition.archRisk} dialog=${composition.needsDialog} conf=${composition.confidence}`,
+      );
+      if (composition.scale === "mega") {
+        // A mega task is never solved in one pass: return the slice roadmap and
+        // let the caller re-invoke on ONE bounded milestone. This is the budget
+        // guard - the full candidate/GVR/verify pipeline never fires on a whole
+        // system, and a misclassified-large task fails toward more work (1.9).
+        // `mode` stays provisional on this path (mode classification is skipped);
+        // `composition.type` is the authoritative task kind for a mega result.
+        const clarification = megaRoadmapClarification(composition);
+        const snapshot = budget.snapshot();
+        emitProgress(
+          `[triage] mega task -> returning ${composition.roadmap.length}-milestone roadmap; not solving in one run`,
+        );
+        store.writeJson("run.json", {
+          status: "needs-clarification",
+          runId,
+          clarification,
+          composition,
+          budget: snapshot,
+          warnings,
+          finishedAt: new Date().toISOString(),
+        });
+        return {
+          runId,
+          runDir: store.runDir,
+          task,
+          mode,
+          finalAnswer: "",
+          brief: null,
+          clarification,
+          composition,
+          bestScore: null,
+          gvr: null,
+          selection: null,
+          verification: null,
+          contextPack: null,
+          deliveryPlan: null,
+          budget: snapshot,
+          budgetExhausted: false,
+          warnings,
+        };
+      }
+    } else {
+      emitProgress("[triage] disabled by config");
+    }
+
     // --- Stage B: task brief (analyst elaboration / approved-brief detection) ---
     if (opts.config.brief.enabled) {
       const approved = extractApprovedBrief(task);
@@ -196,6 +254,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
             kind: stage.kind,
             questions: stage.questions,
             briefDraft: stage.brief,
+            roadmap: [],
           };
           emitProgress(
             stage.kind === "questions"
@@ -207,6 +266,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
             status: "needs-clarification",
             runId,
             clarification,
+            composition,
             budget: snapshot,
             warnings,
             finishedAt: new Date().toISOString(),
@@ -219,6 +279,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
             finalAnswer: "",
             brief: null,
             clarification,
+            composition,
             bestScore: null,
             gvr: null,
             selection: null,
@@ -441,6 +502,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     finalAnswer,
     brief: briefText,
     clarification: null,
+    composition,
     bestScore: gvr?.best.critique?.score ?? null,
     gvr,
     selection,
@@ -472,6 +534,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     status: budgetExhausted ? "budget-exhausted" : "completed",
     runId,
     mode: result.mode,
+    triageScale: composition?.scale ?? null,
     bestScore: result.bestScore,
     brief: briefSource,
     earlyStopped: gvr?.earlyStopped ?? false,

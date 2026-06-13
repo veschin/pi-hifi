@@ -2,6 +2,9 @@
 // All sub-call I/O is single-turn: one system prompt + one user message per call.
 
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
+// Type-only import (fully erased at runtime - no import cycle with triage.ts,
+// which only type-imports from here).
+import type { CompositionPlan } from "./triage.ts";
 
 export type RoleName = "analyst" | "generator" | "grader" | "verifier" | "worker" | "judge" | "scout";
 
@@ -37,6 +40,12 @@ export interface BriefConfig {
   enabled: boolean;
 }
 
+/** Triage stage (one classification call -> the CompositionPlan that gates the run). */
+export interface TriageConfig {
+  /** Run the triage classifier at the very start of every run. */
+  enabled: boolean;
+}
+
 /** Workspace context-gathering stage (scout request-read loop). */
 export interface ContextConfig {
   enabled: boolean;
@@ -66,6 +75,7 @@ export interface ApodexConfig {
     enabled: boolean;
     timeoutMs: number;
   };
+  triage: TriageConfig;
   brief: BriefConfig;
   context: ContextConfig;
   delivery: DeliveryConfig;
@@ -268,11 +278,13 @@ export interface DeliveryPlan {
 
 /** Early-stop payload: the run paused for user input before any solution work. */
 export interface Clarification {
-  kind: "questions" | "brief-review";
+  kind: "questions" | "brief-review" | "roadmap";
   /** Blocking questions (kind=questions). */
   questions: string[];
   /** Draft brief awaiting user approval (kind=brief-review). */
   briefDraft: string | null;
+  /** Ordered milestones of a mega task (kind=roadmap); empty for other kinds. */
+  roadmap: string[];
 }
 
 // --- Pipeline ---
@@ -287,6 +299,8 @@ export interface ApodexResult {
   brief: string | null;
   /** Set when the run paused for clarification; finalAnswer is "" then. */
   clarification: Clarification | null;
+  /** Triage classification of the task, when the triage stage ran. */
+  composition: CompositionPlan | null;
   bestScore: number | null;
   gvr: GvrResult | null;
   selection: SelectionResult | null;

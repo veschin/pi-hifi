@@ -188,6 +188,10 @@ async function runPipelineArm(
   // reasoning loop, comparable with the published runs.
   const pinnedConfig: ApodexConfig = {
     ...config,
+    // Triage OFF (comparability pin): the published runs predate the triage
+    // stage; an extra classification call per task would diverge from them, and
+    // a benchmark task misclassified mega would short-circuit into a roadmap.
+    triage: { ...config.triage, enabled: false },
     // Brief stage OFF (2026-06-12 pin): eval tasks are already fully
     // specified; an analyst pass would add calls and mutate the materials
     // relative to the published runs.

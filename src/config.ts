@@ -39,6 +39,7 @@ export function defaultConfig(): ApodexConfig {
       subCallMaxRetries: 2,
     },
     exec: { enabled: true, timeoutMs: 10_000 },
+    triage: { enabled: true },
     brief: { enabled: true },
     context: {
       enabled: true,
@@ -259,6 +260,11 @@ export function loadConfig(opts: LoadConfigOptions): LoadedConfig {
       const d = delivery as Record<string, unknown>;
       if (typeof d.planEnabled === "boolean") config.delivery.planEnabled = d.planEnabled;
     }
+    const triage = fileConfig.triage;
+    if (typeof triage === "object" && triage !== null && !Array.isArray(triage)) {
+      const t = triage as Record<string, unknown>;
+      if (typeof t.enabled === "boolean") config.triage.enabled = t.enabled;
+    }
     const brief = fileConfig.brief;
     if (typeof brief === "object" && brief !== null && !Array.isArray(brief)) {
       const b = brief as Record<string, unknown>;
@@ -316,6 +322,9 @@ export function loadConfig(opts: LoadConfigOptions): LoadedConfig {
   }
   if (env.APODEX_DELIVERY_PLAN !== undefined) {
     config.delivery.planEnabled = env.APODEX_DELIVERY_PLAN !== "0" && env.APODEX_DELIVERY_PLAN !== "false";
+  }
+  if (env.APODEX_TRIAGE_ENABLED !== undefined) {
+    config.triage.enabled = env.APODEX_TRIAGE_ENABLED !== "0" && env.APODEX_TRIAGE_ENABLED !== "false";
   }
   if (env.APODEX_BRIEF_ENABLED !== undefined) {
     config.brief.enabled = env.APODEX_BRIEF_ENABLED !== "0" && env.APODEX_BRIEF_ENABLED !== "false";

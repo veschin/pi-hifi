@@ -29,8 +29,9 @@ See also: [20_pipeline.md](20_pipeline.md) · [40_extension.md](40_extension.md)
 
 - Roles: `analyst | generator | grader | verifier | worker | judge | scout`.
   Spec value is `"session"` or `"<provider>/<model-id>"`.
-- **analyst** = the brief stage (`brief.analyze*` calls; session-heavy,
-  thinking high, `APODEX_ANALYST`); **judge** = the pairwise selection judge
+- **analyst** = the brief stage AND the triage classifier (`brief.analyze*`,
+  `triage.classify*` calls; session-heavy, thinking high, `APODEX_ANALYST`);
+  **judge** = the pairwise selection judge
   (`selector.judge.*` calls); **scout** = the workspace context gatherer
   (`context.scout.*` calls). All bindable via `.apodex.json` roles or env.
 - **Judge is a heavy role (2026-06-12)**: defaults to the session model with
@@ -67,8 +68,12 @@ overrides (tool params) ← scout worker-mirroring (step 3.5). Everything
 numeric is clamped (`CLAMPS` table) with warnings collected, never silently.
 K rounds 1..10, N candidates 1..8. Defaults: K=4, N=4, threshold 92, heavy
 roles (analyst/generator/grader/verifier/judge) = session,
-worker/scout = deepseek-v4-flash. `brief` block: `enabled` (default true,
-env `APODEX_BRIEF_ENABLED`, file `brief.enabled`).
+worker/scout = deepseek-v4-flash. `triage` block: `enabled` (default true,
+env `APODEX_TRIAGE_ENABLED`, file `triage.enabled`) - runs the triage
+classifier first; a `mega` classification early-returns the slice roadmap
+instead of solving (see [20_pipeline.md](20_pipeline.md) invariant 19).
+`brief` block: `enabled` (default true, env `APODEX_BRIEF_ENABLED`, file
+`brief.enabled`).
 
 New blocks (2026-06-12): `context` (enabled, maxRounds 1..4 = 2, maxFiles
 1..40 = 16, maxFileBytes = 16 KB, maxTotalBytes = 48 KB, maxListingEntries =
@@ -79,8 +84,8 @@ is the dominant marginal cost; cap it via `context.maxTotalBytes`.
 
 ## Artifact store (src/store.ts)
 
-Per run: `<runsDir>/<runId>/{config.json, progress.jsonl, context.json,
-subcalls.jsonl, selection.json, gvr.json, verification.json,
+Per run: `<runsDir>/<runId>/{config.json, triage.json?, progress.jsonl,
+context.json, subcalls.jsonl, selection.json, gvr.json, verification.json,
 final-selftest.json?, delivery.json?, final.md, handoff.md, run.json}`.
 `appendJsonl(name, value)` is the generic line-append (subcalls + progress).
 Store **creation** failure throws (an unauditable run must not start);

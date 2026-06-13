@@ -6,7 +6,7 @@
 
 import { parseJsonLoose, extractEnumField, asStringArray } from "./json.ts";
 import type { SubCallClient } from "./llm.ts";
-import type { ProgressFn } from "./types.ts";
+import type { Clarification, ProgressFn } from "./types.ts";
 
 export type TaskType = "code" | "design" | "research" | "incident" | "general";
 export type TaskScale = "micro" | "bounded" | "mega";
@@ -90,6 +90,15 @@ export function fallbackPlan(rationale: string): CompositionPlan {
     roadmap: [],
     rationale,
   };
+}
+
+/**
+ * The clarification a mega task returns INSTEAD of being solved in one run: the
+ * caller relays the slice roadmap and re-invokes on a single bounded milestone.
+ * Empty roadmap is valid (the model produced no slice plan); the renderer says so.
+ */
+export function megaRoadmapClarification(plan: CompositionPlan): Clarification {
+  return { kind: "roadmap", questions: [], briefDraft: null, roadmap: plan.roadmap };
 }
 
 function asBool(v: unknown): boolean | null {

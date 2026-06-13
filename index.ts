@@ -130,6 +130,17 @@ function composeClarification(result: ApodexResult): string {
       `NEXT STEP: relay these questions to the user VERBATIM and wait for the answers - do not answer them yourself. Then invoke apodex again with the ORIGINAL task text plus a "# Clarification answers" section containing the numbered answers.`,
     ].join("\n\n");
   }
+  if (c.kind === "roadmap") {
+    const milestones =
+      c.roadmap.length > 0
+        ? c.roadmap.map((m, i) => `${i + 1}. ${m}`).join("\n")
+        : "(triage produced no slice plan - the task must be split by hand)";
+    return [
+      `apodex classified this as a LARGE (mega) task (run ${result.runId}) - it is not solved in one pass. Slice roadmap:`,
+      milestones,
+      `NEXT STEP: present this roadmap to the user and ask which milestone to tackle first (or to narrow the task). Then invoke apodex again on that ONE slice as a self-contained task - it runs the full verification pipeline on the bounded slice. Do not attempt the whole system in one run.`,
+    ].join("\n\n");
+  }
   return [
     `apodex composed a task brief for review (run ${result.runId}) - the pipeline is paused until the user approves it:`,
     c.briefDraft ?? "(brief draft missing - see brief.json)",
@@ -357,6 +368,7 @@ export default function (pi: ExtensionAPI) {
         `rounds=${config.rounds} candidates=${config.candidates} scoreThreshold=${config.scoreThreshold}`,
         `budget: ${JSON.stringify(config.budget)}`,
         `exec: ${JSON.stringify(config.exec)}`,
+        `triage: ${JSON.stringify(config.triage)}`,
         `brief: ${JSON.stringify(config.brief)}`,
         `context: ${JSON.stringify(config.context)}`,
         `delivery: ${JSON.stringify(config.delivery)}`,

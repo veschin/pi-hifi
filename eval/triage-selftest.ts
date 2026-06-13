@@ -7,10 +7,10 @@
 // Run (free):  npx tsx eval/triage-selftest.ts
 // Run (+live): APODEX_TRIAGE_LIVE=1 npx tsx eval/triage-selftest.ts
 
-import { parseTriage, fallbackPlan, runTriage } from "../src/triage.ts";
+import { parseTriage, fallbackPlan, runTriage, megaRoadmapClarification } from "../src/triage.ts";
 import { SubCallClient } from "../src/llm.ts";
 import type { SubCallOutcome, SubCallRecord, SubCallRequest } from "../src/types.ts";
-import { loadConfig, DEFAULT_WORKER_MODEL } from "../src/config.ts";
+import { loadConfig, defaultConfig, DEFAULT_WORKER_MODEL } from "../src/config.ts";
 import { Budget } from "../src/budget.ts";
 import { RunStore } from "../src/store.ts";
 import { RoleResolver } from "../src/roles.ts";
@@ -305,6 +305,47 @@ async function runFreeTests(): Promise<boolean> {
         p.needsDialog === true && p.rationale === "classification unparseable twice" && calls() === 2,
         `dialog=${p.needsDialog} rationale="${p.rationale}" calls=${calls()}`,
       ),
+    );
+  }
+
+  // megaRoadmapClarification - the pause payload a mega task returns (kind=roadmap).
+  {
+    const plan = parseTriage(
+      modelJson({
+        type: "code",
+        scale: "mega",
+        oracle: "execute",
+        arch_risk: false,
+        needs_dialog: false,
+        confidence: "high",
+        roadmap: ["a", "b", "c"],
+        rationale: "x",
+      }),
+    );
+    const c = plan ? megaRoadmapClarification(plan) : null;
+    r.push(
+      line(
+        "megaRoadmapClarification carries the roadmap",
+        c !== null && c.kind === "roadmap" && c.roadmap.length === 3 && c.questions.length === 0 && c.briefDraft === null,
+        c ? `kind=${c.kind} roadmap=${c.roadmap.length}` : "null",
+      ),
+    );
+  }
+  {
+    const c = megaRoadmapClarification(fallbackPlan("x"));
+    r.push(
+      line("megaRoadmapClarification empty roadmap ok", c.kind === "roadmap" && c.roadmap.length === 0, `roadmap=${c.roadmap.length}`),
+    );
+  }
+
+  // config.triage - default ON (defaultConfig); APODEX_TRIAGE_ENABLED toggles it
+  // both ways (env beats any .apodex.json, so this is robust to ambient config).
+  {
+    const def = defaultConfig().triage.enabled;
+    const off = loadConfig({ cwd: process.cwd(), env: { APODEX_TRIAGE_ENABLED: "0" } }).config.triage.enabled;
+    const on = loadConfig({ cwd: process.cwd(), env: { APODEX_TRIAGE_ENABLED: "1" } }).config.triage.enabled;
+    r.push(
+      line("config.triage default on / env toggles", def === true && off === false && on === true, `default=${def} off=${off} on=${on}`),
     );
   }
 

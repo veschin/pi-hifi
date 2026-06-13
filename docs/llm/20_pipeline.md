@@ -1,22 +1,24 @@
 ---
 id: pipeline
 kind: spec
-touches: src/pipeline.ts, src/gvr.ts, src/selector.ts, src/verifier.ts, src/prompts.ts, src/brief.ts, src/context.ts, src/delivery.ts
+touches: src/pipeline.ts, src/triage.ts, src/gvr.ts, src/selector.ts, src/verifier.ts, src/prompts.ts, src/brief.ts, src/context.ts, src/delivery.ts
 ---
 
 # Pipeline contracts
 
 See also: [30_subcall_infra.md](30_subcall_infra.md) · [50_eval.md](50_eval.md) · [90_lessons.md](90_lessons.md).
 
-Stage order (`src/pipeline.ts`): task brief (analyst) -> workspace context
-gathering (scout) -> mode classification -> [code mode, N>1: candidate
-selection] -> GVR loop -> execution evidence for best attempt -> claim-level
-verification -> conditional assembly -> delivery plan + handoff.md. Human-readable method
+Stage order (`src/pipeline.ts`): triage (analyst classifier -> composition
+plan; a `mega` scale early-returns the slice roadmap) -> task brief (analyst)
+-> workspace context gathering (scout) -> mode classification -> [code mode,
+N>1: candidate selection] -> GVR loop -> execution evidence for best attempt
+-> claim-level verification -> conditional assembly -> delivery plan +
+handoff.md. Human-readable method
 description with diagram: README §3 (NOTE: §3 predates the context/delivery
 stages) - this spec holds the *invariants*.
 
-Every progress event is `[stage]`-prefixed (`[team] [context] [classify]
-[select] [gvr] [exec] [verify] [assemble] [deliver]`), the run starts with a
+Every progress event is `[stage]`-prefixed (`[team] [triage] [context]
+[classify] [select] [gvr] [exec] [verify] [assemble] [deliver]`), the run starts with a
 `[team] role=provider/model ...` roster line, and all events are mirrored to
 `progress.jsonl`.
 
@@ -106,6 +108,22 @@ Every progress event is `[stage]`-prefixed (`[team] [context] [classify]
     task text. Acceptance criteria in the materials are mandatory: the
     selftest convention requires one check per criterion and the grader
     treats an unmet criterion as a substantive violation (`prompts.ts`).
+19. **Triage stage (`src/triage.ts`, 3.2a)**: one analyst classification call
+    (+ one bounded re-ask) at the VERY START, gated by `config.triage.enabled`
+    (default on; OFF in the scored eval `run-eval.ts` for comparability with
+    the published runs). It fills a FIXED vocabulary
+    (type/scale/oracle/archRisk/needsDialog/roadmap) - the model picks
+    parameters, this code picks what runs (1.7; the model-driven orchestrator
+    stays rejected). FAIL-SAFE: a malformed, low-confidence, or roadmap-less
+    `mega` classification is coerced toward `needsDialog` (never a silent cheap
+    route); budget/abort propagate, any other failure returns the fail-safe
+    plan. The ONLY acted-on gate in 3.2a is `scale === "mega"`: it early-returns
+    `ApodexResult.clarification` of kind `"roadmap"` (slice milestones) with
+    `finalAnswer: ""` - the budget guard, so the candidate/GVR/verify pipeline
+    never fires on a whole system - mirroring the brief stage's clarification
+    pause. `composition` is recorded on every post-triage exit path
+    (`triage.json` + `ApodexResult.composition`). The oracle/archRisk/
+    needsDialog gates for non-mega scales are deferred to later increments.
 
 ## Open questions (brief stage, accepted 2026-06-12 - to revisit)
 
