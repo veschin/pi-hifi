@@ -3,160 +3,236 @@ id: handoff
 kind: guide
 ---
 
-# Handoff
+# Handoff - pi-hifi: make the composer the working default (PRODUCTION-READY)
 
-## Operating mode (the user's standing directive for this project)
+## THE ONLY DEFINITION OF DONE (read this first, last, and between every step)
 
-Work **autonomously and continuously** - do NOT stop for check-ins; take the work
-all the way to the finish at **production-hifi quality**. Spending on real pi runs
-(cheap-flash classification, live smokes, paid eval) to VERIFY is sanctioned - do
-not ask before spending on verification. Non-negotiable bars: verify FREE first
-(selftests, no LLM) before paying; "done" means OBSERVED behavior, never "looks
-right"; commit each verified slice to `feat/sandbox` with what-was-verified in the
-body; critic before the completion message, `model:opus` for any
-sandbox/isolation/security change. Stop to ask ONLY when a decision is genuinely
-the user's and unresolvable from context - and do the safely-completable work
-first. Never cram a large item into exhausted context (break it into committed
-green slices).
+**DONE = a fresh, real run of the extension uses the COMPOSER as its engine and
+returns a usable, grounded answer for EVERY task mode the tool advertises (code,
+design, incident, general), observed with your own eyes - not the old linear
+pipeline, not behind a flag, not "tests pass".**
 
----
+Nothing else is "done". Do NOT write the word "done", "complete", "ready", or
+"working" about anything that is not this. If `/hifi <task>` in a real session
+does not run the composer end-to-end and return a usable answer across all four
+modes, the session has produced NOTHING, regardless of how many commits are green.
 
-## READ THIS FIRST - the honest status (do not skip)
+This is small work. The engine is already built and proven on code. What remains
+is: make it the default (done in code), VERIFY it across the other modes and the
+real entry points, FIX what breaks, and make the delivery output clean. Mostly
+verify-and-fix, little new code. If you find yourself building breadth, you have
+already failed (see STOP-LIST).
 
-**The designed CORE IS NOW BUILT and PROVEN end-to-end.** The prior failure
-("built perimeter, deferred the core") is resolved. `docs/pi-hifi-architecture.md`
-§1-3 (work-primitive catalog + composer) exists in code, free-tested, and proven
-live: `decompose -> gen -> run -> judge -> synthesize` ran on a real code task with
-the OBSERVED sandbox exit code load-bearing (not prose). See
-[25_composer.md](25_composer.md) and [devlog 05](devlog/05_devlog_composer_primitives.md).
-
-What is built (4 committed green slices, feat/sandbox, NOT pushed):
-
-- `src/primitives.ts` - the two-channel contract (observation vs claim; gates read
-  observation ONLY) + the fixed catalog of 5 primitives (gen/run/judge/audit/
-  synthesize), each reusing existing machinery + a real hifiGate.
-- `src/composer.ts` - `validateGraph` (static typed-I/O guarantee) +
-  `runComposer` (topological parallel execution, gate-flag-propagate, budget/
-  checkpoint/collect) + `buildCanonicalGraph`.
-- `src/decompose.ts` - the strong entry: task -> validated catalog DAG (bounded
-  depth, fail-safe-deeper, never invents a primitive).
-- `src/composer-pipeline.ts` - `runComposerHifi`, the composer execution path
-  behind `config.composer.enabled` (default OFF). `runHifi` is UNTOUCHED and
-  stays the default + eval-pinned path until the composer reaches measured parity.
-
-**The composer is OFF by default.** `runHifi` (the linear middle) is still the
-production + eval path. The next job is to MEASURE the composer against it and,
-once at parity, flip the default - then grow the catalog.
+> If the human says this DONE definition is wrong, rewrite ONLY this block from
+> his one-line correction; everything below still applies.
 
 ---
 
-## THE TASK - next steps (the real backlog now that the core exists)
+## STOP-LIST - forbidden until DONE passes (these ratholes burned 4 sessions)
 
-Pick the next committed green slice. Suggested order:
+You may NOT do any of the following before the DONE acceptance run is green:
+- Add primitives beyond the existing 6 (gen/run/judge/audit/synthesize/decompose).
+  The 23-primitive catalog in the architecture doc is ASPIRATIONAL, NOT required.
+- Write or extend eval harnesses / parity measurements / scoring.
+- Write new docs or refactor existing ones (you MAY update THIS handoff to DONE).
+- Rename anything. Refactor the duplicated front (prepareRun/finishRun). Add
+  cheap-gen / per-primitive model knobs. Wire checkpoint resume.
+- Measure parity, run the full eval, or gate the finish on "prove it's better".
 
-1. **Parity measurement.** Run the composer path against the linear path on the
-   eval (`eval/run-eval.ts` pins composer OFF for the baseline; add a composer
-   arm). The published code eval is SATURATED (flash 0.96->1.00) - it likely
-   cannot discriminate; you may need harder tasks (the analyzer/scoring
-   discipline in [50_eval.md](50_eval.md)). Do NOT flip `composer.enabled`
-   default to true until parity is OBSERVED, not assumed.
-2. **Per-primitive cheap model (old 3.4 D1).** Bind `gen` to flash while
-   judge/synthesize stay strong - NOW SAFE because the gates ground cheap output
-   (the strong+weak design, architecture §0/1.5). It was unsafe on the linear
-   pipeline (no objective oracle per round); under the composer's run-gate it is
-   safe. Add as a per-primitive model knob; measure.
-3. **Grow the catalog** (architecture §2, "more is better"): `probe` (old 3.6,
-   archRisk spike: build PoC -> run -> observe), the RESEARCH tier
-   (read/grep/web.fetch - observation-dominant), `test`/`bench`/`typecheck`.
-   Each = one catalog row (executor + hifiGate) + a free gate selftest.
-4. **Checkpoint stateless-resume protocol.** The composer detects a checkpoint
-   pause but currently ships best-so-far + a warning instead of returning a
-   clarification (documented CONTRACT GAP in `composer-pipeline.ts` + 25_composer).
-   Wire the resume before shipping any checkpoint-bearing graph.
-5. **Unify the duplicated front.** `runComposerHifi` mirrors ~90 lines of
-   runHifi's front (deliberate isolation during the parallel-paths phase). Once
-   the composer reaches parity and replaces the linear middle, factor a shared
-   `prepareRun`/`finishRun` and delete runHifi's middle.
-
-Drive at MEASUREMENT next (1): the core is built; the open question is whether it
-beats the linear path and where. Everything else is additive on a proven core.
+If a task seems to need any of these to reach DONE, you are wrong about the task.
+Re-read the DONE block. The composer already works; you are verifying and fixing,
+not building.
 
 ---
 
-## Mistakes - do NOT repeat
+## FIRST ACTION (do this before reading more, planning, or building)
 
-1. **Built perimeter, deferred the core** (the prior central failure - now
-   RESOLVED). The lesson stands: when the design names a core, build the core
-   first; treat perimeter as subordinate.
-2. **False green**: a test must assert a GUARANTEED invariant, never an emergent
-   artifact. (The primitive gates are tested on synthetic observations; the
-   hard-to-fake proofs - lying claim ignored, artifact identity - are the
-   load-bearing ones.)
-3. **Don't add a gate that fires against the thesis.** `run.gate` PASSES a
-   FAILED-but-executed test (failure observed verbatim IS grounding); it fails
-   only when nothing ran. A gate that suppressed execution grounding would be the
-   old oracle=none mistake again.
-4. **A behavior flag must reach EVERY stage** (grep the assumption). `materials`
-   (invariant 13/18 shared text) must reach decompose AND the composer ctx.task;
-   `execEnabled` must thread into the PrimitiveContext.
-5. **Default-open on a security boundary** -> fail-closed. The composer path's
-   admission gate is byte-faithful to runHifi (no tier + !allowUnsandboxed ->
-   exec DISABLED). opus-verified.
-6. **Shared-value wiring**: grep every call site when a field must reach all
-   consumers; tsc does not catch non-propagation.
-7. **hifi = OBSERVED behavior.** Every "done" traces to a run you executed.
-   Verify FREE before paying.
-8. **Sandbox/isolation/admission is a SECURITY BOUNDARY - critic `model:opus`.**
-9. **Cheap-model gen is safe ONLY under grounding** (the composer's gates). Don't
-   blind-flip it on the un-gated linear path.
-10. **Eval comparability pinned by single lines** in `run-eval.ts` pinnedConfig
-    (triage/brief/context/delivery/polyglot/**composer** all OFF). Removing any
-    diverges from `docs/eval-results/20260611-164416`.
-11. **`__setSandboxTier` is test-only** (throws without `APODEX_TEST_HOOKS=1`).
-12. **Don't cram a large item into exhausted context.** Committed green slices only.
+Run the composer on a real task and WATCH it, end to end:
+
+```bash
+cd ~/ai/pi-apodex
+npx tsx eval/smoke-composer.ts        # code mode, already-proven baseline
+```
+
+Then immediately do the same for design + incident + general (Task T2). Outcome
+first. Do not spend the session reading and planning; the code is known to you
+below.
 
 ---
 
-## What IS built (reuse - do NOT rebuild). feat/sandbox, ~22 commits ahead of main, NOT pushed.
+## REAL PROGRESS (honest - what is true, what is NOT)
 
-- **The composer core** (this session): `src/primitives.ts`, `src/composer.ts`,
-  `src/decompose.ts`, `src/composer-pipeline.ts` - see above + 25_composer.md.
-- **Sandbox** (`src/sandbox.ts`, `sandbox-pool.ts`, `runner.ts`, `exec.ts`):
-  rootless cell + admission scheduler + node/python runner. `execAdmission` is the
-  single security authority; `allowUnsandboxed` default FALSE. The composer's
-  `run` primitive routes through `runCandidateSelfTest` -> this layer.
-- **Triage** (`src/triage.ts`): CompositionPlan classifier; fronts decompose.
-- **Polyglot** (`config.polyglot`): generatorSystem/analystSystem; feeds `gen`.
-- **Linear pipeline** (`src/pipeline.ts` `runHifi`): the DEFAULT path; the
-  composer's peer until parity. `classifyMode` is exported (reused by the composer
-  path). The roles (selector/JUDGE_SYSTEM/atom-auditor/GVR/verifier) are now ALSO
-  formalized as catalog primitives - the ad-hoc stages remain for the linear path.
-- **Delivery/UX** (`index.ts`): composeDelivery/composeClarification; dispatches
-  `config.composer.enabled ? runComposerHifi : runHifi`; /hifi+/apodex.
+Branch `feat/sandbox`, ahead of main, NOT pushed. tsc clean; full FREE suite green.
+
+BUILT and PROVEN:
+- The composer engine: `src/primitives.ts` (the two-channel contract: gates read
+  the OBSERVATION channel only, never the model's claim), `src/composer.ts`
+  (validateGraph + topological parallel runComposer), `src/decompose.ts`
+  (task -> validated catalog DAG), `src/composer-pipeline.ts` (`runComposerHifi`).
+- 6 primitives with real hifi gates: gen, run, judge, audit, synthesize, decompose.
+- Proven LIVE end-to-end on CODE: decompose -> gen -> run -> judge -> synthesize,
+  with a REAL sandbox exit code load-bearing (eval/smoke-composer.ts, 11/11).
+- `config.composer.enabled` now defaults TRUE; index.ts dispatches
+  `composer.enabled ? runComposerHifi : runHifi`. runHifi is the reversible
+  fallback (NOT deleted; eval pins composer OFF for comparability).
+- FREE selftests: primitives 35, composer 26, decompose 16 - all green.
+
+BUILT but NOT YET VERIFIED (this is the remaining work, Tasks T2-T5):
+- The composer on DESIGN / INCIDENT / GENERAL modes live (only code is proven).
+- Workspace-context tasks through the composer (the scout front IS wired into
+  runComposerHifi, but never exercised live through this path).
+- Clarification pauses (mega roadmap, brief questions) + stateless re-invoke
+  through the composer (replicated from runHifi, never exercised live).
+- Delivery rendering for composer results: HifiResult.gvr/selection/verification
+  are null on this path; composeDelivery/summaryLines/renderHandoff must read
+  cleanly (no "n/a / null" noise). NOT yet checked.
+
+NOT built - ASPIRATIONAL, OUT OF SCOPE FOR DONE (do not touch this session):
+- Research tier (read/grep/list/web), the rest of experiment/factcheck, revise,
+  select, probe; cheap-gen; checkpoint resume; front unification.
 
 ---
 
-## Orient / smoke (run before changing anything)
+## TASKS (each with BINARY, OBSERVABLE acceptance criteria)
+
+### T1 - Composer is the default and routes from the real entry points
+Largely done in code; VERIFY, don't rebuild.
+- AC1: `loadConfig` returns `composer.enabled === true` by default (no env/file).
+- AC2: `index.ts` `execute()` dispatches to `runComposerHifi` when enabled; the
+  `hifi` tool and `/hifi` + `/apodex` commands all flow through `execute()`.
+- AC3: a live run via the standalone composer path returns a HifiResult whose
+  run.json shows `"path":"composer"`.
+
+### T2 - The composer works on EVERY advertised mode (the core of DONE)
+- AC1: a live composer run on a CODE task returns a non-empty answer that
+  preserves a runnable solution block AND has observed run evidence (exit code).
+- AC2: a live composer run on a DESIGN task returns a complete design answer
+  (architecture + failure modes + a rejected alternative); no crash; gates pass
+  or are honestly flagged.
+- AC3: a live composer run on an INCIDENT task returns a diagnosis (root cause +
+  evidence chain); no crash.
+- AC4: a live composer run on a GENERAL task returns a coherent answer; no crash.
+- AC5: ANY breakage found in AC1-AC4 is FIXED in src/ (not worked around, not
+  deferred), and the run re-passes.
+- Verify by extending eval/smoke-composer.ts to drive one real task per mode
+  through runComposerHifi (reuse eval/tasks/*), asserting non-empty + on-shape +
+  no throw. (This edits an existing smoke; it is NOT a new harness.)
+
+### T3 - Workspace context is gathered and grounds the answer
+- AC1: a live composer run on a task that names a real repo file (context ON)
+  gathers that file via the scout front and the final answer reflects its real
+  content (grounded, not guessed).
+- AC2: no crash when context is enabled; materials reach decompose AND gen.
+
+### T4 - Clarification + stateless re-invoke through the composer
+- AC1: a mega-scale task returns `clarification.kind === "roadmap"`, finalAnswer
+  "", run.json status "needs-clarification" - same shape as runHifi.
+- AC2: an ambiguous task in interactive mode returns brief questions; re-invoking
+  with a `# Clarification answers` / `# Approved brief` section proceeds to a
+  full answer.
+- AC3: composeClarification renders each pause correctly (it already handles the
+  shapes; verify the composer produces them).
+
+### T5 - Delivery output is clean for composer results
+- AC1: composeDelivery / summaryLines produce no misleading "n/a" or "null" lines
+  caused by the null gvr/selection/verification on the composer path; the summary
+  reflects the composer (e.g. show decompose depth / composer hifi, or omit the
+  linear-only lines) rather than printing dead fields.
+- AC2: handoff.md and final.md render correctly on the composer path.
+- AC3: the NEXT STEP directive is correct for the task shape.
+- This MAY require small edits to index.ts summaryLines (allowed: it is part of
+  the DONE surface, not forbidden breadth).
+
+### T6 - No regression
+- AC1: `npx tsc --noEmit` clean.
+- AC2: full FREE suite green: selfcheck (refs 1.00), primitives, composer,
+  decompose, triage, exec, generator, delivery-render. `./docs/llm/validate.sh` 0.
+- AC3: the eval still pins composer OFF (comparability with the published linear
+  runs intact); do NOT run the full eval.
+
+### T7 - Close it
+- AC1: critic with `model:opus` on the production integration (it touches the
+  exec/admission security boundary on every code run) - confirm fail-closed
+  admission, observation-grounded gates, clean delivery; fix findings.
+- AC2: commit to feat/sandbox with what-was-OBSERVED in the body (the live runs).
+- AC3: rewrite the DONE block of this handoff to state DONE is met, with the
+  evidence (the four mode runs + their observed outputs).
+
+---
+
+## IMPLEMENTATION PLAN (ordered, outcome-first)
+
+1. FIRST ACTION (above): run smoke-composer.ts; confirm code mode still works as
+   default. (T1 AC3, T2 AC1.)
+2. T2: extend smoke-composer.ts to drive design + incident + general live; run;
+   FIX every breakage in src/ until all four modes return on-shape answers.
+   This is where the unknowns are - budget most of the session here.
+3. T3: run one workspace-context task through the composer; fix grounding/wiring.
+4. T4: run a mega + an ambiguous task; confirm the clarification shapes; fix.
+5. T5: read index.ts summaryLines/composeDelivery; remove dead-field noise for
+   composer results; verify handoff.md/final.md.
+6. T6 regression sweep, then T7 critic + commit + mark this handoff DONE.
+
+Spending on live runs to VERIFY is sanctioned - do not ask before paying for
+verification. Verify FREE (tsc + selftests) before each paid run. "Done" = the
+run you observed, never "looks right".
+
+---
+
+## MISTAKES - DO NOT REPEAT (every known one; also pinned in CLAUDE.md)
+
+1. Built perimeter / breadth / docs / harnesses instead of the deliverable. The
+   deliverable is the DONE block. Everything else is the STOP-LIST.
+2. Reported piece-level "done/proven" while the product goal was unmet. That
+   reads as lying. Only the DONE block is "done".
+3. Hedged the user's own design behind self-imposed caution (kept the composer
+   OFF behind a flag "until parity"). The composer is the design; ship it ON.
+4. False-green tests: assert GUARANTEED invariants, never emergent artifacts.
+5. A gate must never fire against the thesis: `run` PASSES a failed-but-executed
+   test (failure observed verbatim is grounding); it fails only when nothing ran.
+6. A behavior flag/field must reach EVERY stage - grep the assumption, not one
+   site (materials must reach decompose AND gen; execEnabled must thread into
+   PrimitiveContext).
+7. Security boundary is fail-CLOSED: no sandbox tier + !allowUnsandboxed ->
+   exec DISABLED, answer ships flagged "not executed". Never default-open.
+8. Eval comparability is pinned by single lines (triage/brief/context/delivery/
+   polyglot/composer all OFF in run-eval.ts pinnedConfig). Do not disturb.
+9. `__setSandboxTier` is test-only (throws without APODEX_TEST_HOOKS=1).
+10. Do not cram a broken half-state into an exhausted context. But also do not
+    use "don't cram" as an excuse to defer the finish (see consequences).
+
+---
+
+## HARD RULES - consequences (the human's terms; zero tolerance)
+
+| Offense | Verdict | Operational meaning |
+|---|---|---|
+| Deferring a task ("next session"), or drifting to STOP-LIST work | **amputation** | STOP. The deferral/drift IS the session's failure. Do the task now or it did not happen. No "I'll do X later" - there is no later. |
+| Degrading the design in the worse direction (default-open gate, a gate that reads the claim channel, an ungrounded "pass", dumbing a primitive, deleting observation-grounding) | **quartering** | Hard revert on the spot. Never weaken observation-grounding or fail-closed security. The design only moves toward MORE grounding, never less. |
+| Cumulative deviations that push the finish past this session | **death / network disconnection** | The session has betrayed its only purpose. Production-ready was achievable; failing to deliver it is total failure. |
+
+There is little work here. The engine exists and is proven. Verify it across the
+modes, fix what breaks, clean the output, ship it as the default. That is the
+whole job.
+
+---
+
+## ORIENT / VERIFY COMMANDS
 
 ```bash
 cd ~/ai/pi-apodex
 npx tsc --noEmit
-npx tsx eval/selfcheck.ts                 # refs 1.00, broken 0.50-0.56
-npx tsx eval/primitives-selftest.ts       # FREE 35 - the catalog gates
-npx tsx eval/composer-selftest.ts         # FREE 26 - validation + executor
-npx tsx eval/decompose-selftest.ts        # FREE 16 - bounded depth + fail-safe
-npx tsx eval/triage-selftest.ts           # FREE 17
+npx tsx eval/smoke-composer.ts            # composer end-to-end, code (PAID, ~$0.02)
+# T2: extend this smoke to design+incident+general, then run.
+npx tsx eval/primitives-selftest.ts        # FREE 35
+npx tsx eval/composer-selftest.ts          # FREE 26
+npx tsx eval/decompose-selftest.ts         # FREE 16
+npx tsx eval/selfcheck.ts ; npx tsx eval/triage-selftest.ts
 npx tsx eval/exec-selftest.ts ; npx tsx eval/generator-selftest.ts
 npx tsx eval/delivery-render-selftest.ts
 ./docs/llm/validate.sh
-# LIVE (paid, proves the composer end-to-end; needs deepseek auth + rootless tier):
-#   npx tsx eval/smoke-composer.ts        # 11/11, ~$0.02
-# tiered host only (else SKIP): sandbox-selftest, sandbox-pool-selftest,
-#   runner-selftest, smoke-triage, smoke-polyglot, exec-gate-smoke, smoke-pipeline
 ```
 
-Read order: this file -> [25_composer.md](25_composer.md) (THE built core) ->
-`docs/pi-hifi-architecture.md` §1-3 (the design) -> [20_pipeline.md](20_pipeline.md)
-(the linear path the composer parallels) -> [30_subcall_infra.md](30_subcall_infra.md)
--> [50_eval.md](50_eval.md) (before measuring) ->
-`docs/research/test-time-boosting.md` (the science).
+Code map: `src/composer-pipeline.ts` (runComposerHifi - the path, READ FIRST),
+`src/composer.ts` (engine), `src/primitives.ts` (the 6 gates),
+`src/decompose.ts`, `index.ts` (dispatch + delivery rendering - T5).

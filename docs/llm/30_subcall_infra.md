@@ -86,11 +86,12 @@ New blocks (2026-06-12): `context` (enabled, maxRounds 1..4 = 2, maxFiles
 EVERY downstream call's input - with expensive session-bound heavy roles this
 is the dominant marginal cost; cap it via `context.maxTotalBytes`.
 
-`composer` block: `enabled` (default FALSE, env `APODEX_COMPOSER`, file
+`composer` block: `enabled` (default TRUE, env `APODEX_COMPOSER`, file
 `composer.enabled`) - selects the work-primitive composer path
-(`runComposerHifi`) over the linear runHifi middle. Default OFF: runHifi stays the
-eval-pinned path until the composer reaches measured parity. The eval pins it OFF
-explicitly. See [25_composer.md](25_composer.md).
+(`runComposerHifi`, the designed engine) over the linear runHifi middle. Default
+ON: the composer is the execution path; linear `runHifi` is the reversible
+fallback (`APODEX_COMPOSER=0`). The eval pins it OFF explicitly for comparability
+with the published linear-pipeline runs. See [25_composer.md](25_composer.md).
 
 `polyglot` (top-level boolean, default TRUE, env `APODEX_POLYGLOT`, 3.5):
 stack-agnostic code generation. ON - the generator emits the language the task

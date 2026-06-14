@@ -50,9 +50,11 @@ export function defaultConfig(): HifiConfig {
       maxListingEntries: 1_500,
     },
     delivery: { planEnabled: true },
-    // The work-primitive composer is OFF by default: runHifi (the linear middle)
-    // stays the execution path until the composer reaches measured parity.
-    composer: { enabled: false },
+    // The work-primitive composer is the DEFAULT execution path (the designed
+    // architecture). The linear runHifi middle remains reachable as a reversible
+    // fallback via composer.enabled=false (env APODEX_COMPOSER=0). The eval pins
+    // it OFF explicitly for comparability with the published linear-pipeline runs.
+    composer: { enabled: true },
     polyglot: true,
     runsDir: ".hifi/runs",
   };
