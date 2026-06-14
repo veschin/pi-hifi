@@ -1,16 +1,21 @@
-// Execution evidence for code candidates: run a candidate's self-test with the
-// local node binary in a throwaway tempdir. Constraints: hard timeout with
-// SIGKILL escalation, minimal env, output capped. This is NOT a security
-// sandbox - it is an evidence channel for locally-authored code; full isolation
-// is deferred (see README).
+// Execution evidence for code candidates. Prefers the real sandbox (src/sandbox.ts:
+// kernel-enforced limits + isolation); falls back to a bare-host throwaway-tempdir
+// run ONLY when no sandbox tier is available (backward-compatible with the
+// pre-sandbox behaviour - no worse than before, strictly safer where a tier
+// exists). Stack-agnostic: runCandidateSelfTest runs node / python / ... by the
+// language tag, not just node.
 
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { detectSandbox, execAdmission, type CellEvidence } from "./sandbox.ts";
+import { Scheduler, detectCapacity } from "./sandbox-pool.ts";
+import { parseExperiment } from "./runner.ts";
 import type { ExecEvidence } from "./types.ts";
 
 const OUTPUT_CAP_BYTES = 64 * 1024;
+const SELFTEST_MEM_MAX = 512 * 1024 * 1024;
 
 export interface ExecRequest {
   /** File name -> contents. Must contain `entry`. */
@@ -25,138 +30,89 @@ function capped(buf: string): string {
   return `${buf.slice(0, OUTPUT_CAP_BYTES)}\n...[output truncated at 64KB]`;
 }
 
-export async function runNodeScript(req: ExecRequest): Promise<ExecEvidence> {
-  if (!Object.prototype.hasOwnProperty.call(req.files, req.entry)) {
-    return {
-      ran: false,
-      exitCode: null,
-      stdout: "",
-      stderr: "",
-      timedOut: false,
-      skippedReason: `entry file ${req.entry} missing from files`,
-    };
-  }
-  for (const name of Object.keys(req.files)) {
-    // Path traversal guard: file names must stay inside the tempdir.
+function cellToExec(ce: CellEvidence): ExecEvidence {
+  return {
+    ran: ce.ran,
+    exitCode: ce.exitCode,
+    stdout: ce.stdout,
+    stderr: ce.stderr,
+    timedOut: ce.timedOut,
+    ...(ce.skippedReason !== undefined ? { skippedReason: ce.skippedReason } : {}),
+  };
+}
+
+// One scheduler per process: admission control is shared across every exec in a
+// run (selector candidates, GVR probes, eval fixtures) so they cannot oversubscribe.
+let schedulerPromise: Promise<Scheduler> | null = null;
+function getScheduler(): Promise<Scheduler> {
+  if (!schedulerPromise) schedulerPromise = detectCapacity().then((cap) => new Scheduler(cap));
+  return schedulerPromise;
+}
+
+/** Bare-host fallback: run argv in a throwaway tempdir, minimal env. NO isolation. */
+async function spawnBareHost(files: Record<string, string>, argv: string[], timeoutMs: number): Promise<ExecEvidence> {
+  for (const name of Object.keys(files)) {
     if (name.includes("..") || path.isAbsolute(name)) {
-      return {
-        ran: false,
-        exitCode: null,
-        stdout: "",
-        stderr: "",
-        timedOut: false,
-        skippedReason: `unsafe file name: ${name}`,
-      };
+      return { ran: false, exitCode: null, stdout: "", stderr: "", timedOut: false, skippedReason: `unsafe file name: ${name}` };
     }
   }
-
   let dir: string;
   try {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), "apodex-exec-"));
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "hifi-exec-"));
   } catch (err) {
-    return {
-      ran: false,
-      exitCode: null,
-      stdout: "",
-      stderr: "",
-      timedOut: false,
-      skippedReason: `tempdir creation failed: ${err instanceof Error ? err.message : String(err)}`,
-    };
+    return { ran: false, exitCode: null, stdout: "", stderr: "", timedOut: false, skippedReason: `tempdir creation failed: ${err instanceof Error ? err.message : String(err)}` };
   }
-
   try {
-    // File writes degrade to skip-evidence, never to a rejection: a disk
-    // hiccup here must not kill the GVR loop that called the probe.
-    try {
-      for (const [name, contents] of Object.entries(req.files)) {
-        const filePath = path.join(dir, name);
-        fs.mkdirSync(path.dirname(filePath), { recursive: true });
-        fs.writeFileSync(filePath, contents, "utf8");
-      }
-    } catch (err) {
-      return {
-        ran: false,
-        exitCode: null,
-        stdout: "",
-        stderr: "",
-        timedOut: false,
-        skippedReason: `file write failed: ${err instanceof Error ? err.message : String(err)}`,
-      };
+    for (const [name, contents] of Object.entries(files)) {
+      const fp = path.join(dir, name);
+      fs.mkdirSync(path.dirname(fp), { recursive: true });
+      fs.writeFileSync(fp, contents, "utf8");
     }
-
     return await new Promise<ExecEvidence>((resolve) => {
       let stdout = "";
       let stderr = "";
       let timedOut = false;
       let settled = false;
-
-      const child = spawn(process.execPath, [req.entry], {
-        cwd: dir,
-        stdio: ["ignore", "pipe", "pipe"],
-        // Minimal env: candidate code gets no inherited secrets.
-        env: { NODE_ENV: "test" },
-      });
-
-      let sigkillTimer: ReturnType<typeof setTimeout> | undefined;
+      let sigkill: ReturnType<typeof setTimeout> | undefined;
+      const child = spawn(argv[0]!, argv.slice(1), { cwd: dir, stdio: ["ignore", "pipe", "pipe"], env: { NODE_ENV: "test", PATH: process.env.PATH ?? "/usr/bin:/bin" } });
       const killTimer = setTimeout(() => {
         timedOut = true;
-        try {
-          child.kill("SIGTERM");
-        } catch {
-          /* ignore */
-        }
-        sigkillTimer = setTimeout(() => {
-          try {
-            child.kill("SIGKILL");
-          } catch {
-            /* ignore */
-          }
-        }, 2_000);
-        sigkillTimer.unref();
-      }, req.timeoutMs);
-
-      child.stdout.on("data", (chunk: Buffer) => {
-        if (stdout.length < OUTPUT_CAP_BYTES * 2) stdout += chunk.toString();
-      });
-      child.stderr.on("data", (chunk: Buffer) => {
-        if (stderr.length < OUTPUT_CAP_BYTES * 2) stderr += chunk.toString();
-      });
-
-      const settle = (evidence: ExecEvidence) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(killTimer);
-        if (sigkillTimer) clearTimeout(sigkillTimer);
-        resolve(evidence);
-      };
-
-      child.on("close", (code) => {
-        settle({
-          ran: true,
-          exitCode: code,
-          stdout: capped(stdout),
-          stderr: capped(stderr),
-          timedOut,
-        });
-      });
-      child.on("error", (err) => {
-        settle({
-          ran: false,
-          exitCode: null,
-          stdout: capped(stdout),
-          stderr: capped(stderr),
-          timedOut,
-          skippedReason: `spawn failed: ${err.message}`,
-        });
-      });
+        try { child.kill("SIGTERM"); } catch { /* ignore */ }
+        sigkill = setTimeout(() => { try { child.kill("SIGKILL"); } catch { /* ignore */ } }, 2_000);
+        sigkill.unref();
+      }, timeoutMs);
+      child.stdout.on("data", (c: Buffer) => { if (stdout.length < OUTPUT_CAP_BYTES * 2) stdout += c.toString(); });
+      child.stderr.on("data", (c: Buffer) => { if (stderr.length < OUTPUT_CAP_BYTES * 2) stderr += c.toString(); });
+      const settle = (e: ExecEvidence) => { if (settled) return; settled = true; clearTimeout(killTimer); if (sigkill) clearTimeout(sigkill); resolve(e); };
+      child.on("close", (code) => settle({ ran: true, exitCode: code, stdout: capped(stdout), stderr: capped(stderr), timedOut }));
+      child.on("error", (err) => settle({ ran: false, exitCode: null, stdout: capped(stdout), stderr: capped(stderr), timedOut, skippedReason: `spawn failed: ${err.message}` }));
     });
   } finally {
-    try {
-      fs.rmSync(dir, { recursive: true, force: true });
-    } catch {
-      /* tempdir cleanup is best-effort */
-    }
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
   }
+}
+
+/** Run files+argv: sandbox when a tier exists, bare-host fallback otherwise. */
+async function execFiles(files: Record<string, string>, argv: string[], timeoutMs: number): Promise<ExecEvidence> {
+  // exec.ts always permits the bare-host fallback (backward-compatible for the
+  // eval scorer and any direct caller), so the choice here is only sandbox vs
+  // bare-host. The PRODUCT pipeline enforces the stricter "disabled" gate above
+  // this layer (it never calls exec when admission is disabled by config).
+  const admission = execAdmission(await detectSandbox(), true);
+  if (admission === "sandbox") {
+    const sched = await getScheduler();
+    const ce = await sched.schedule({ argv, files, limits: { memMaxBytes: SELFTEST_MEM_MAX, wallMs: timeoutMs, outputCapBytes: OUTPUT_CAP_BYTES } });
+    return cellToExec(ce);
+  }
+  // No isolation tier: same behaviour as before the sandbox existed.
+  return spawnBareHost(files, argv, timeoutMs);
+}
+
+export async function runNodeScript(req: ExecRequest): Promise<ExecEvidence> {
+  if (!Object.prototype.hasOwnProperty.call(req.files, req.entry)) {
+    return { ran: false, exitCode: null, stdout: "", stderr: "", timedOut: false, skippedReason: `entry file ${req.entry} missing from files` };
+  }
+  return execFiles(req.files, ["node", req.entry], req.timeoutMs);
 }
 
 /** Single source of truth for rendering exec evidence into prompts. */
@@ -185,32 +141,27 @@ export interface ExtractedCode {
   selftest: string | null;
 }
 
-/**
- * Code-mode answers follow a convention (enforced by the generator prompt):
- * a ```js solution``` block and a ```js selftest``` block; the self-test
- * imports "./solution.mjs" and exits non-zero on failure.
- */
+/** Legacy node-only block extractor; still used by the eval scorer. */
 export function extractCodeBlocks(answer: string): ExtractedCode {
   const solution = SOLUTION_BLOCK.exec(answer)?.[1] ?? null;
   const selftest = SELFTEST_BLOCK.exec(answer)?.[1] ?? null;
   return { solution, selftest };
 }
 
+/**
+ * Run a candidate's own self-test as execution evidence - STACK-AGNOSTIC (node /
+ * python / ... by the `<lang> solution`/`<lang> selftest` tag). No runnable
+ * experiment (missing/unsupported blocks) -> ran:false + reason, so the caller
+ * still ships the artifact flagged "not executed".
+ */
 export async function runCandidateSelfTest(answer: string, timeoutMs: number): Promise<ExecEvidence> {
-  const { solution, selftest } = extractCodeBlocks(answer);
-  if (!solution || !selftest) {
-    return {
-      ran: false,
-      exitCode: null,
-      stdout: "",
-      stderr: "",
-      timedOut: false,
-      skippedReason: !solution ? "no `js solution` block in answer" : "no `js selftest` block in answer",
-    };
+  const parsed = parseExperiment(answer);
+  if ("error" in parsed) {
+    return { ran: false, exitCode: null, stdout: "", stderr: "", timedOut: false, skippedReason: parsed.error };
   }
-  return runNodeScript({
-    files: { "solution.mjs": solution, "selftest.mjs": selftest },
-    entry: "selftest.mjs",
-    timeoutMs,
-  });
+  const files: Record<string, string> = {
+    [parsed.runner.solutionFile]: parsed.solution,
+    [parsed.runner.selftestFile]: parsed.selftest,
+  };
+  return execFiles(files, parsed.runner.argv, timeoutMs);
 }

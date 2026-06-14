@@ -1,7 +1,7 @@
 // Eval harness: every task runs two ways on the SAME engine -
 //   baseline: one single-pass call (identical prompt/convention/params to the
 //             pipeline's own generator role);
-//   pipeline: the full apodex pipeline;
+//   pipeline: the full pi-hifi pipeline;
 // then both answers are scored by the same programmatic check. Prints a summary
 // table and persists JSON results.
 //
@@ -20,11 +20,11 @@ import * as path from "node:path";
 import { Budget } from "../src/budget.ts";
 import { loadConfig } from "../src/config.ts";
 import { SubCallClient } from "../src/llm.ts";
-import { runApodex } from "../src/pipeline.ts";
+import { runHifi } from "../src/pipeline.ts";
 import { generatorSystem, generatorUser } from "../src/prompts.ts";
 import { RoleResolver } from "../src/roles.ts";
 import { RunStore } from "../src/store.ts";
-import type { ApodexConfig, TaskMode } from "../src/types.ts";
+import type { HifiConfig, TaskMode } from "../src/types.ts";
 import { createStandaloneRegistry } from "./standalone.ts";
 import { codeTasks } from "./tasks/code.ts";
 import { designTasks } from "./tasks/design.ts";
@@ -100,14 +100,14 @@ function engineEnv(engine: Engine): NodeJS.ProcessEnv {
   const heavy = engine === "pro" ? "deepseek/deepseek-v4-pro" : "deepseek/deepseek-v4-flash";
   return {
     ...process.env,
-    APODEX_GENERATOR: heavy,
-    APODEX_GRADER: heavy,
-    APODEX_VERIFIER: heavy,
-    APODEX_WORKER: "deepseek/deepseek-v4-flash",
+    HIFI_GENERATOR: heavy,
+    HIFI_GRADER: heavy,
+    HIFI_VERIFIER: heavy,
+    HIFI_WORKER: "deepseek/deepseek-v4-flash",
     // Protocol pin (2026-06-12): the judge default moved to the session-heavy
     // model; the published 20260611 numbers ran with judge mirroring the flash
     // worker. Pinned to flash so post-change runs stay comparable.
-    APODEX_JUDGE: "deepseek/deepseek-v4-flash",
+    HIFI_JUDGE: "deepseek/deepseek-v4-flash",
   };
 }
 
@@ -119,7 +119,7 @@ function evalConfig(
   args: CliArgs,
   engine: Engine,
   runsDir: string,
-): { config: ApodexConfig; warnings: string[] } {
+): { config: HifiConfig; warnings: string[] } {
   const { config, warnings } = loadConfig({
     cwd: process.cwd(),
     env: engineEnv(engine),
@@ -143,7 +143,7 @@ function evalConfig(
 
 async function runBaseline(
   task: EvalTask,
-  config: ApodexConfig,
+  config: HifiConfig,
   registry: ReturnType<typeof createStandaloneRegistry>,
   runsDir: string,
 ): Promise<{ answer: string; wallMs: number; subCalls: number; costUsd: number; error?: string }> {
@@ -176,7 +176,7 @@ async function runBaseline(
 
 async function runPipelineArm(
   task: EvalTask,
-  config: ApodexConfig,
+  config: HifiConfig,
   configWarnings: string[],
   registry: ReturnType<typeof createStandaloneRegistry>,
 ): Promise<{ answer: string; wallMs: number; subCalls: number; costUsd: number; error?: string }> {
@@ -186,17 +186,27 @@ async function runPipelineArm(
   // (an uncontrolled confound), and the delivery planner adds calls without
   // touching the answer - both stay OFF so pipeline-vs-baseline isolates the
   // reasoning loop, comparable with the published runs.
-  const pinnedConfig: ApodexConfig = {
+  const pinnedConfig: HifiConfig = {
     ...config,
+    // Triage OFF (comparability pin): the published runs predate the triage
+    // stage; an extra classification call per task would diverge from them, and
+    // a benchmark task misclassified mega would short-circuit into a roadmap.
+    triage: { ...config.triage, enabled: false },
     // Brief stage OFF (2026-06-12 pin): eval tasks are already fully
     // specified; an analyst pass would add calls and mutate the materials
     // relative to the published runs.
     brief: { ...config.brief, enabled: false },
     context: { ...config.context, enabled: false },
     delivery: { ...config.delivery, planEnabled: false },
+    // Composer OFF (comparability pin): the published runs are the linear runHifi
+    // middle; the composer is a separate execution path measured on its own.
+    composer: { ...config.composer, enabled: false },
+    // Polyglot OFF (comparability pin): the published runs used the legacy JS
+    // convention and the scorer extracts JS blocks; the eval tasks are JS.
+    polyglot: false,
   };
   try {
-    const result = await runApodex({
+    const result = await runHifi({
       config: pinnedConfig,
       configWarnings,
       registry,
@@ -225,7 +235,7 @@ async function runPipelineArm(
 async function scoreAnswer(
   task: EvalTask,
   answer: string,
-  config: ApodexConfig,
+  config: HifiConfig,
   registry: ReturnType<typeof createStandaloneRegistry>,
   runsDir: string,
   arm: string,
@@ -335,7 +345,7 @@ function printReport(results: TaskResult[]): string {
   const engine = results[0]?.engine ?? "?";
   lines.push("");
   lines.push(
-    `=== apodex eval [engine: ${engine} heavy roles] - single-pass baseline (mean of ${BASELINE_SAMPLES}) vs verification pipeline ===`,
+    `=== pi-hifi eval [engine: ${engine} heavy roles] - single-pass baseline (mean of ${BASELINE_SAMPLES}) vs verification pipeline ===`,
   );
   lines.push("");
   lines.push(

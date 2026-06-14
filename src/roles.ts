@@ -4,7 +4,7 @@
 // env vars) - this code never reads credentials itself.
 
 import type { Api, Model } from "@earendil-works/pi-ai";
-import type { ApodexConfig, RoleName } from "./types.ts";
+import type { HifiConfig, RoleName } from "./types.ts";
 import { DEFAULT_HEAVY_MODEL, SESSION_MODEL } from "./config.ts";
 
 /** Minimal surface of pi's ModelRegistry that we depend on. */
@@ -23,7 +23,7 @@ export interface ResolvedRole {
 }
 
 export interface RoleResolverOptions {
-  config: ApodexConfig;
+  config: HifiConfig;
   registry: ModelRegistryLike;
   /** Active session model, if running inside a pi session. */
   sessionModel?: Model<Api>;
@@ -37,7 +37,7 @@ export class RoleResolutionError extends Error {
 }
 
 export class RoleResolver {
-  private readonly config: ApodexConfig;
+  private readonly config: HifiConfig;
   private readonly registry: ModelRegistryLike;
   private readonly sessionModel: Model<Api> | undefined;
   // Resolution (including a degraded fallback) is cached for the lifetime of
@@ -52,7 +52,7 @@ export class RoleResolver {
     this.sessionModel = opts.sessionModel;
   }
 
-  getRoleSpec(role: RoleName): ApodexConfig["roles"][RoleName] {
+  getRoleSpec(role: RoleName): HifiConfig["roles"][RoleName] {
     return this.config.roles[role];
   }
 

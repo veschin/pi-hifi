@@ -7,7 +7,7 @@ export class BudgetExhaustedError extends Error {
   readonly reason: string;
 
   constructor(reason: string) {
-    super(`apodex budget exhausted: ${reason}`);
+    super(`pi-hifi budget exhausted: ${reason}`);
     this.name = "BudgetExhaustedError";
     this.reason = reason;
   }

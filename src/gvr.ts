@@ -79,6 +79,8 @@ export interface GvrOptions {
    * deterministically so a lenient grader cannot early-stop on broken code.
    */
   execProbe?: (attempt: string) => Promise<ExecEvidence>;
+  /** Stack-agnostic generation (3.5); default false = legacy JS convention. */
+  polyglot?: boolean;
   onProgress?: ProgressFn;
   labelPrefix?: string;
 }
@@ -138,7 +140,7 @@ export async function runGvr(opts: GvrOptions): Promise<GvrResult> {
         const gen = await opts.client.call({
           role: "generator",
           label: `${opts.labelPrefix ?? "gvr"}.generate.r${round}`,
-          systemPrompt: generatorSystem(opts.mode),
+          systemPrompt: generatorSystem(opts.mode, opts.polyglot ?? false),
           userText: generatorUser(opts.task),
         });
         if (!gen.ok) {
@@ -228,7 +230,7 @@ export async function runGvr(opts: GvrOptions): Promise<GvrResult> {
         const revision = await opts.client.call({
           role: "generator",
           label: `${opts.labelPrefix ?? "gvr"}.revise.r${round}`,
-          systemPrompt: generatorSystem(opts.mode),
+          systemPrompt: generatorSystem(opts.mode, opts.polyglot ?? false),
           userText: reviserUser(opts.task, currentAttempt, critiqueText),
           temperature: 0.4,
         });

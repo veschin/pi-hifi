@@ -3,173 +3,269 @@ id: handoff
 kind: guide
 ---
 
-# Handoff
+# Handoff - pi-hifi: make the composer the working default (PRODUCTION-READY)
 
-State as of 2026-06-12 (second session that day): brief stage (task analyst)
-+ heavy judge implemented and verified locally; NOT committed when this file
-was written - the session ends with the commit. Previously published state:
-commit `7ca3b50` (main, https://github.com/veschin/pi-apodex).
+## THE ONLY DEFINITION OF DONE - STATUS: MET (2026-06-14)
 
-## What exists (verified this session)
+**DONE = a fresh, real run of the extension uses the COMPOSER as its engine and
+returns a usable, grounded answer for EVERY task mode the tool advertises (code,
+design, incident, general), observed with your own eyes - not the old linear
+pipeline, not behind a flag, not "tests pass".**
 
-- **Brief stage** (`src/brief.ts`, devlog 03): an `analyst` role
-  (session-heavy, thinking high) elaborates the raw task BEFORE any solution
-  work. Interactive runs can PAUSE: clarification questions or a draft brief
-  for user review come back as `ApodexResult.clarification`; the session
-  model relays them and re-invokes with `# Clarification answers` /
-  `# Approved brief` sections in the task (stateless, chat-mediated).
-  Ready briefs join the shared materials as `# Task brief`; acceptance
-  criteria are enforced by the selftest convention and the grader.
-- **Judge is a heavy role now**: session model + thinking high by default
-  (was: mirror of the flash worker, thinking off). Scout still mirrors.
-- Full pipeline: brief -> scout context -> classify -> [code: candidates ->
-  exec -> judge] -> GVR -> claim audit -> assembly -> delivery. tsc clean,
-  selfcheck passes, live flash verification of both brief paths (pause with
-  questions; approved-brief end-to-end, $0.0074).
-- Eval protocol pin 2 (50_eval.md): brief OFF + judge pinned flash in
-  run-eval.ts - published `docs/eval-results/20260611-164416` numbers stay
-  comparable. Both smokes pin `APODEX_BRIEF_ENABLED=0`.
+This is MET and OBSERVED. All runs go through `runComposerHifi` (the real entry
+point; `config.composer.enabled` default true; run.json `"path":"composer"`):
 
-## What does NOT exist
+- **CODE** (pro models, real rootless sandbox): decompose N=1 -> gen -> run
+  **exit 0 OBSERVED** -> synthesize, hifi=true; plus a forced N=2 gen×2 -> run×2
+  -> judge (evidence-grounded, `sawEvidence=true`) -> synthesize.
+- **DESIGN** (flash): gen×2 -> judge -> audit(14 atoms) -> synthesize; answer
+  carried architecture + data layout + a failure-mode table + 6 rejected
+  alternatives + a verified/unverified split (audit grounding the assembly).
+- **INCIDENT** (flash): correct root cause (release-leak on the early-return
+  path) + a 5-link evidence chain + a competing-hypotheses table that dismissed
+  the planted red herrings + a safe pre-fix verification step.
+- **GENERAL** (flash): 5 ranked causes each with confirm/refute evidence + a
+  phased plan, every causal claim flagged unverified (audit discipline on an
+  oracle-less task).
+- Mode-sweep guaranteed-invariant assertions: **26/26** in
+  `eval/smoke-composer.ts` (no throw, non-empty, path=composer, mode preserved,
+  graph ends in synthesize). Content quality OBSERVED by eye, never asserted.
+- **CONTEXT grounding**: live run, context ON, scout gathered the real
+  `src/sandbox.ts` (14.2 KB, 2 rounds); answer quoted the file-only token
+  `bare-host` + the exact `execAdmission` returns - grounded, not guessed.
+- **CLEAN delivery**: `ComposerSummary {hifi, orderCount, flaggedCount, depth}`;
+  `summaryLines` / `renderHandoff` / tool `details` now report composer grounding
+  instead of the dead linear `n/a` fields. Observed live - a real composer
+  delivery + handoff.md carry NO "best grader score: n/a", "claim atoms: 0/0/0",
+  "external verifier: n/a". FREE-locked in `delivery-render-selftest`. opus critic
+  cleared it: no false-green grounding (hifi cannot render while flagged),
+  fail-closed admission untouched, observation gates untouched.
 
-- **Validation status (user-mandated note, 2026-06-12): this session's code
-  was NOT fully validated and may contain bugs.** What ran: tsc, selfcheck,
-  ONE live flash run of the questions path and of the approved-brief path,
-  the user's live TUI run of the questions round-trip, two critic rounds.
-  What never ran: the brief-review pause live, a full clarification->answers->
-  approved-brief->final-answer cycle end-to-end, acceptance-criteria
-  enforcement quality on real tasks, any run with the new heavy-judge default
-  in the selector path. Treat src/brief.ts and the pipeline wiring as
-  lightly-tested until exercised.
-- README not updated this session: §3 method description, the roles table,
-  and config docs predate the analyst role and brief stage.
-- No in-TUI live test of the clarification round-trip (tool result ->
-  session model relays -> re-invocation) - verified only at the runApodex
-  API level; the wake-up itself is TUI behavior.
-- **No execution sandbox** (user-flagged as REQUIRED, 2026-06-12): self-tests
-  run model-authored code directly on the host as a bare node process (no
-  shell inherited, env stripped to NODE_ENV) - but the test code itself can
-  spawn arbitrary processes via child_process, write outside its tempdir, and
-  open network connections; heavy tests also compete with the host for
-  CPU/RAM. The narrow runner is behavioral discipline, not a boundary.
-- Everything from the previous handoff still open: no abort for
-  /apodex-launched runs, no detached runs, no web-grounded verification, no
-  judge panel, no consistency cascade.
-- The eval cannot measure the brief stage or the heavy judge (saturated at
-  pro, and both are pinned off for comparability); a harder benchmark is the
-  prerequisite - also for the user's "catch up to Opus" question.
+- **CLARIFICATION (T4)** - VERIFIED LIVE through the composer, 9/9 shape
+  assertions: a mega task -> triage scale=mega -> 13-milestone roadmap
+  clarification, finalAnswer "", run.json status "needs-clarification"; an
+  ambiguous interactive task -> brief paused with 5 questions, finalAnswer "";
+  re-invoke with a `# Approved brief` section -> analyst skipped, decompose ->
+  composer -> a full 11k-char answer (run.json path=composer / completed /
+  brief=approved). Stateless re-invoke honored end to end.
 
-## Open design questions (user asked to mark these; resolve later)
+Every advertised AC (code/design/incident/general modes, context grounding,
+clean delivery, clarification) is now OBSERVED live through the composer.
 
-See 20_pipeline.md "Open questions (brief stage)": review-stop friction
-(every standard-complexity interactive run pauses), analyst runs before
-scout (no workspace context when asking), approved-brief marker can match
-inside a code fence, no cross-run question cap, complexity gate is prompt
-judgment, eval judge pin diverges from in-session defaults.
+> If the human says this DONE definition is wrong, rewrite ONLY this block from
+> his one-line correction; everything below still applies.
 
-## Current problems (user-facing, live)
+---
 
-1. The user's live pi session needs `/reload` to get the new extension code,
-   then one real `/apodex` with a vague task to see the clarification
-   round-trip in the TUI (first live exercise of triggerTurn on
-   apodex-clarification messages).
-2. Huge monolithic tasks: the analyst now negotiates slicing in the brief,
-   but the user still slices projects manually across runs.
-3. **Cross-run context (backlog, 2026-06-12, live incident)**: runs are
-   stateless and the calling model does not realize it - a follow-up
-   "имплементируй диздок" arrived without the previous run's design doc
-   (run-20260612-163401); the analyst correctly paused, the session model had
-   to be told to inline the prior final.md. Fix directions: state
-   STATELESSNESS explicitly in the tool/task param descriptions ("no memory
-   of previous runs or this chat - inline prior outputs"), have
-   composeDelivery advertise "reference <runDir>/final.md in follow-up
-   tasks", and/or let the scout see runsDir artifacts (.apodex/runs is
-   gitignored, so invisible to the listing today).
-4. **Generation and verification are wrongly coupled (backlog, 2026-06-12,
-   live incident - user-corrected framing)**: the user fed a Three.js/WebGL
-   single-HTML design doc; the pipeline can only run node self-tests, so it
-   has NO execution evidence for browser code and effectively refused. The
-   user's point is decisive: "меня не ебёт что оно только на ноде умеет, мне
-   надо реализацию". The pipeline must ALWAYS deliver an implementation in
-   the requested language/format; execution verification is a SEPARATE,
-   best-effort layer - run it when a runner exists (node today), otherwise
-   ship the code with an explicit "not executed - verify on your side" flag
-   (the hifi named-skip already models this). DO NOT add an analyst "unfit"
-   verdict (rejected by the user: refusing the user is wrong). Fix
-   directions: (a) the node-only selftest convention must not gate non-node
-   languages - let the generator emit Go/browser/etc. and skip the exec
-   probe with a surfaced reason instead of forcing the `js solution` block;
-   (b) multi-language / browser-headless runners (ties into option F
-   sandbox) extend coverage but are NOT a precondition for delivering the
-   code. The split: code is the deliverable, execution evidence is a bonus.
-   **Unifying view (user, 2026-06-12)**: item 4 and option F are two ends of
-   one design. A task asking for a concrete implementation SHOULD be run in
-   the sandbox (option F) on its actual language - that is the normal path,
-   not an extra. "Theory / general" work (design, incident, explanation) has
-   nothing to execute and stays on text-level verification (rubric + claim
-   audit, already working). The decision is one fork: executable -> sandbox
-   with a real run; non-executable -> text checks. Today's gap was an
-   executable-but-non-node task falling through that fork; the sandbox
-   (multi-language runner inside F) closes it.
+## STOP-LIST - forbidden until DONE passes (these ratholes burned 4 sessions)
 
-## Next options (user picks; not a queue)
+You may NOT do any of the following before the DONE acceptance run is green:
+- Add primitives beyond the existing 6 (gen/run/judge/audit/synthesize/decompose).
+  The 23-primitive catalog in the architecture doc is ASPIRATIONAL, NOT required.
+- Write or extend eval harnesses / parity measurements / scoring.
+- Write new docs or refactor existing ones (you MAY update THIS handoff to DONE).
+- Rename anything. Refactor the duplicated front (prepareRun/finishRun). Add
+  cheap-gen / per-primitive model knobs. Wire checkpoint resume.
+- Measure parity, run the full eval, or gate the finish on "prove it's better".
 
-- **A. Live TUI round-trip test (~15 min, blocks nothing).** /reload, run
-  `/apodex хочу клон факторио в 3д`, answer the questions, approve the brief,
-  watch the full flow.
-- **B. Harder benchmark (~1 d).** Tasks where pro baseline lands 0.5-0.8;
-  unlocks measuring brief/judge/Opus-comparison. Optional third arm: Opus
-  single-pass baseline (roles are provider-agnostic).
-- **C. README refresh (~1-2 h).** §3 + roles/config tables: analyst, brief,
-  clarification contract, judge default.
-- **D. Brief-review config gate (~1 h).** `brief.review: always|never` for
-  users who want questions but not the review stop.
-- **E. Previous options remain**: judge panel, consistency cascade,
-  command-path abort, detached runs.
-- **F. Execution sandbox (~1-2 d, user-flagged REQUIRED).** Isolated runner
-  for self-tests (container or equivalent) with CPU/RAM/time caps and no
-  default network: (1) keeps heavy tests from loading the host system,
-  (2) makes running model-authored code an actual security boundary instead
-  of convention. Prerequisite for untrusted/hostile tasks; unlocks the
-  multi-language runner registry (go/python) and any relaxation of the
-  no-npm/no-network selftest convention.
+If a task seems to need any of these to reach DONE, you are wrong about the task.
+Re-read the DONE block. The composer already works; you are verifying and fixing,
+not building.
 
-## Read order
+---
 
-1. This file.
-2. [20_pipeline.md](20_pipeline.md) - invariants 17-18 + open questions are
-   new (brief stage).
-3. [30_subcall_infra.md](30_subcall_infra.md) - seven roles, scout-only
-   mirroring; [40_extension.md](40_extension.md) - clarification contract.
-4. [50_eval.md](50_eval.md) - protocol pin 2 - and
-   [90_lessons.md](90_lessons.md) before trusting any measurement.
-5. [devlog/03_devlog_brief_stage.md](devlog/03_devlog_brief_stage.md) for
-   this session's reasoning.
+## FIRST ACTION (do this before reading more, planning, or building)
 
-## Smoke test (run before touching anything)
+Run the composer on a real task and WATCH it, end to end:
 
 ```bash
-cd ~/ai/pi-apodex && npx tsc --noEmit && npx tsx eval/selfcheck.ts
-# expected: no tsc output; selfcheck ends with
-# "SELFCHECK PASSED: hidden tests are sound"
-
-npx tsx eval/smoke-context.ts
-# expected: "SMOKE-CONTEXT PASSED" (~80 s, ~$0.02, all-flash, brief pinned off)
+cd ~/ai/pi-hifi
+npx tsx eval/smoke-composer.ts        # code mode, already-proven baseline
 ```
 
-Brief-stage live check (no committed smoke yet - token-economy decision):
-re-create the two-path script from devlog 03 / this session's transcript, or
-run option A above. Path assertions: vague task + briefInteractive ->
-`clarification.kind === "questions"`; task containing `# Approved brief` ->
-no pause, `result.brief !== null`.
+Then immediately do the same for design + incident + general (Task T2). Outcome
+first. Do not spend the session reading and planning; the code is known to you
+below.
 
-## Agent errors to log
+---
 
-1. (carried over, still open) The final critic round over the publication
-   batch (README/LICENSE/packaging) was interrupted on 2026-06-11 and never
-   re-run.
-2. The shared-value wiring lesson struck AGAIN (third time): `enrichedTask`/
-   `materials` reached most-but-not-all consumers (assembler, planner,
-   handoff renderer missed); the critic caught it, same as devlog 02. The
-   90_lessons rule ("grep every call site of the thing it replaces") was not
-   applied during implementation - it must run BEFORE handing to the critic.
+## REAL PROGRESS (honest - what is true, what is NOT)
+
+Branch `feat/sandbox`, ahead of main, NOT pushed. tsc clean; full FREE suite green.
+
+BUILT and PROVEN:
+- The composer engine: `src/primitives.ts` (the two-channel contract: gates read
+  the OBSERVATION channel only, never the model's claim), `src/composer.ts`
+  (validateGraph + topological parallel runComposer), `src/decompose.ts`
+  (task -> validated catalog DAG), `src/composer-pipeline.ts` (`runComposerHifi`).
+- 6 primitives with real hifi gates: gen, run, judge, audit, synthesize, decompose.
+- Proven LIVE end-to-end on CODE: decompose -> gen -> run -> judge -> synthesize,
+  with a REAL sandbox exit code load-bearing (eval/smoke-composer.ts, 11/11).
+- `config.composer.enabled` now defaults TRUE; index.ts dispatches
+  `composer.enabled ? runComposerHifi : runHifi`. runHifi is the reversible
+  fallback (NOT deleted; eval pins composer OFF for comparability).
+- FREE selftests: primitives 35, composer 26, decompose 16 - all green.
+
+NOW VERIFIED this session (evidence in the DONE block above):
+- The composer on DESIGN / INCIDENT / GENERAL modes - live, observed on-shape.
+- Workspace-context tasks through the composer - live (scout gathered a real
+  file; the answer quoted its content - grounded, not guessed).
+- Delivery rendering for composer results - clean: `ComposerSummary` replaces the
+  null linear fields; no "n/a / null" noise. FREE-locked + observed live. opus
+  critic cleared (no false-green, fail-closed admission + observation gates intact).
+
+ALSO VERIFIED LIVE this session (T4 clarification through the composer):
+- mega -> 13-milestone roadmap (finalAnswer "", run.json needs-clarification);
+  ambiguous interactive -> brief paused with 5 questions; re-invoke with a
+  `# Approved brief` section -> analyst skipped -> full 11k answer (run.json
+  path=composer / completed / brief=approved). 9/9 shape assertions.
+
+NOT built - ASPIRATIONAL, OUT OF SCOPE FOR DONE (do not touch this session):
+- Research tier (read/grep/list/web), the rest of experiment/factcheck, revise,
+  select, probe; cheap-gen; checkpoint resume; front unification.
+
+---
+
+## TASKS (each with BINARY, OBSERVABLE acceptance criteria)
+
+### T1 - Composer is the default and routes from the real entry points
+Largely done in code; VERIFY, don't rebuild.
+- AC1: `loadConfig` returns `composer.enabled === true` by default (no env/file).
+- AC2: `index.ts` `execute()` dispatches to `runComposerHifi` when enabled; the
+  `hifi` tool and `/hifi` + `/apodex` commands all flow through `execute()`.
+- AC3: a live run via the standalone composer path returns a HifiResult whose
+  run.json shows `"path":"composer"`.
+
+### T2 - The composer works on EVERY advertised mode (the core of DONE)
+- AC1: a live composer run on a CODE task returns a non-empty answer that
+  preserves a runnable solution block AND has observed run evidence (exit code).
+- AC2: a live composer run on a DESIGN task returns a complete design answer
+  (architecture + failure modes + a rejected alternative); no crash; gates pass
+  or are honestly flagged.
+- AC3: a live composer run on an INCIDENT task returns a diagnosis (root cause +
+  evidence chain); no crash.
+- AC4: a live composer run on a GENERAL task returns a coherent answer; no crash.
+- AC5: ANY breakage found in AC1-AC4 is FIXED in src/ (not worked around, not
+  deferred), and the run re-passes.
+- Verify by extending eval/smoke-composer.ts to drive one real task per mode
+  through runComposerHifi (reuse eval/tasks/*), asserting non-empty + on-shape +
+  no throw. (This edits an existing smoke; it is NOT a new harness.)
+
+### T3 - Workspace context is gathered and grounds the answer
+- AC1: a live composer run on a task that names a real repo file (context ON)
+  gathers that file via the scout front and the final answer reflects its real
+  content (grounded, not guessed).
+- AC2: no crash when context is enabled; materials reach decompose AND gen.
+
+### T4 - Clarification + stateless re-invoke through the composer
+- AC1: a mega-scale task returns `clarification.kind === "roadmap"`, finalAnswer
+  "", run.json status "needs-clarification" - same shape as runHifi.
+- AC2: an ambiguous task in interactive mode returns brief questions; re-invoking
+  with a `# Clarification answers` / `# Approved brief` section proceeds to a
+  full answer.
+- AC3: composeClarification renders each pause correctly (it already handles the
+  shapes; verify the composer produces them).
+
+### T5 - Delivery output is clean for composer results
+- AC1: composeDelivery / summaryLines produce no misleading "n/a" or "null" lines
+  caused by the null gvr/selection/verification on the composer path; the summary
+  reflects the composer (e.g. show decompose depth / composer hifi, or omit the
+  linear-only lines) rather than printing dead fields.
+- AC2: handoff.md and final.md render correctly on the composer path.
+- AC3: the NEXT STEP directive is correct for the task shape.
+- This MAY require small edits to index.ts summaryLines (allowed: it is part of
+  the DONE surface, not forbidden breadth).
+
+### T6 - No regression
+- AC1: `npx tsc --noEmit` clean.
+- AC2: full FREE suite green: selfcheck (refs 1.00), primitives, composer,
+  decompose, triage, exec, generator, delivery-render. `./docs/llm/validate.sh` 0.
+- AC3: the eval still pins composer OFF (comparability with the published linear
+  runs intact); do NOT run the full eval.
+
+### T7 - Close it
+- AC1: critic with `model:opus` on the production integration (it touches the
+  exec/admission security boundary on every code run) - confirm fail-closed
+  admission, observation-grounded gates, clean delivery; fix findings.
+- AC2: commit to feat/sandbox with what-was-OBSERVED in the body (the live runs).
+- AC3: rewrite the DONE block of this handoff to state DONE is met, with the
+  evidence (the four mode runs + their observed outputs).
+
+---
+
+## IMPLEMENTATION PLAN (ordered, outcome-first)
+
+1. FIRST ACTION (above): run smoke-composer.ts; confirm code mode still works as
+   default. (T1 AC3, T2 AC1.)
+2. T2: extend smoke-composer.ts to drive design + incident + general live; run;
+   FIX every breakage in src/ until all four modes return on-shape answers.
+   This is where the unknowns are - budget most of the session here.
+3. T3: run one workspace-context task through the composer; fix grounding/wiring.
+4. T4: run a mega + an ambiguous task; confirm the clarification shapes; fix.
+5. T5: read index.ts summaryLines/composeDelivery; remove dead-field noise for
+   composer results; verify handoff.md/final.md.
+6. T6 regression sweep, then T7 critic + commit + mark this handoff DONE.
+
+Spending on live runs to VERIFY is sanctioned - do not ask before paying for
+verification. Verify FREE (tsc + selftests) before each paid run. "Done" = the
+run you observed, never "looks right".
+
+---
+
+## MISTAKES - DO NOT REPEAT (every known one; also pinned in CLAUDE.md)
+
+1. Built perimeter / breadth / docs / harnesses instead of the deliverable. The
+   deliverable is the DONE block. Everything else is the STOP-LIST.
+2. Reported piece-level "done/proven" while the product goal was unmet. That
+   reads as lying. Only the DONE block is "done".
+3. Hedged the user's own design behind self-imposed caution (kept the composer
+   OFF behind a flag "until parity"). The composer is the design; ship it ON.
+4. False-green tests: assert GUARANTEED invariants, never emergent artifacts.
+5. A gate must never fire against the thesis: `run` PASSES a failed-but-executed
+   test (failure observed verbatim is grounding); it fails only when nothing ran.
+6. A behavior flag/field must reach EVERY stage - grep the assumption, not one
+   site (materials must reach decompose AND gen; execEnabled must thread into
+   PrimitiveContext).
+7. Security boundary is fail-CLOSED: no sandbox tier + !allowUnsandboxed ->
+   exec DISABLED, answer ships flagged "not executed". Never default-open.
+8. Eval comparability is pinned by single lines (triage/brief/context/delivery/
+   polyglot/composer all OFF in run-eval.ts pinnedConfig). Do not disturb.
+9. `__setSandboxTier` is test-only (throws without HIFI_TEST_HOOKS=1).
+10. Do not cram a broken half-state into an exhausted context. But also do not
+    use "don't cram" as an excuse to defer the finish (see consequences).
+
+---
+
+## HARD RULES - consequences (the human's terms; zero tolerance)
+
+| Offense | Verdict | Operational meaning |
+|---|---|---|
+| Deferring a task ("next session"), or drifting to STOP-LIST work | **amputation** | STOP. The deferral/drift IS the session's failure. Do the task now or it did not happen. No "I'll do X later" - there is no later. |
+| Degrading the design in the worse direction (default-open gate, a gate that reads the claim channel, an ungrounded "pass", dumbing a primitive, deleting observation-grounding) | **quartering** | Hard revert on the spot. Never weaken observation-grounding or fail-closed security. The design only moves toward MORE grounding, never less. |
+| Cumulative deviations that push the finish past this session | **death / network disconnection** | The session has betrayed its only purpose. Production-ready was achievable; failing to deliver it is total failure. |
+
+There is little work here. The engine exists and is proven. Verify it across the
+modes, fix what breaks, clean the output, ship it as the default. That is the
+whole job.
+
+---
+
+## ORIENT / VERIFY COMMANDS
+
+```bash
+cd ~/ai/pi-hifi
+npx tsc --noEmit
+npx tsx eval/smoke-composer.ts            # composer end-to-end, code (PAID, ~$0.02)
+# T2: extend this smoke to design+incident+general, then run.
+npx tsx eval/primitives-selftest.ts        # FREE 35
+npx tsx eval/composer-selftest.ts          # FREE 26
+npx tsx eval/decompose-selftest.ts         # FREE 16
+npx tsx eval/selfcheck.ts ; npx tsx eval/triage-selftest.ts
+npx tsx eval/exec-selftest.ts ; npx tsx eval/generator-selftest.ts
+npx tsx eval/delivery-render-selftest.ts
+./docs/llm/validate.sh
+```
+
+Code map: `src/composer-pipeline.ts` (runComposerHifi - the path, READ FIRST),
+`src/composer.ts` (engine), `src/primitives.ts` (the 6 gates),
+`src/decompose.ts`, `index.ts` (dispatch + delivery rendering - T5).

@@ -10,7 +10,7 @@ export { extractBoolField, extractEnumField };
 // --- code bucket: hidden deterministic tests -------------------------------
 
 /**
- * Hidden tests import "./solution.mjs" and print "APODEX_TESTS <passed>/<total>"
+ * Hidden tests import "./solution.mjs" and print "HIFI_TESTS <passed>/<total>"
  * before exiting (exit code 0 only when all passed).
  */
 export async function scoreCodeWithHiddenTest(
@@ -36,7 +36,7 @@ export async function scoreCodeWithHiddenTest(
   // Tests report after every check; the LAST report line carries the final
   // tally, and a crash mid-suite still yields partial credit for checks that
   // objectively passed before it.
-  const matches = [...evidence.stdout.matchAll(/APODEX_TESTS (\d+)\/(\d+)/g)];
+  const matches = [...evidence.stdout.matchAll(/HIFI_TESTS (\d+)\/(\d+)/g)];
   const match = matches[matches.length - 1];
   if (!match) {
     return {

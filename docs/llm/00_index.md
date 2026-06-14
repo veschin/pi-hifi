@@ -19,6 +19,10 @@ code - never aspirational.
   contracts and numbered invariants (read before touching src/gvr.ts,
   src/selector.ts, src/verifier.ts, src/pipeline.ts, src/prompts.ts,
   src/context.ts, src/delivery.ts).
+- [25_composer.md](25_composer.md) - the work-primitive layer + composer (the
+  designed core, architecture §1-3): primitive/observation/gate contracts, the
+  fixed catalog, graph validation + the topological executor (read before
+  touching src/primitives.ts, src/composer.ts, src/decompose.ts).
 - [30_subcall_infra.md](30_subcall_infra.md) - sub-call client, roles,
   budgets, config precedence, artifact store (read before touching
   src/llm.ts, src/roles.ts, src/budget.ts, src/config.ts, src/store.ts,

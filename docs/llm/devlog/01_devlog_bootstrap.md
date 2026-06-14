@@ -66,7 +66,7 @@ beats strong×1 only under execution-grounded selection.
 
 - Academic-style README (abstract/ToC/methodology/threats-to-validity), D2
   sequence diagram, published eval artifacts, MIT; repo
-  github.com/veschin/pi-apodex; pushed via SSH. Local quirk: HTTPS to
+  github.com/veschin/pi-hifi; pushed via SSH. Local quirk: HTTPS to
   github.com is reset on this network - README gained an SSH install
   fallback; pristine-clone load (no node_modules) verified the
   devDependencies packaging decision.

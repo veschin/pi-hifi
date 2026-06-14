@@ -1,6 +1,6 @@
-# Build: pi-apodex — a verification-centric reasoning extension for Pi
+# Build: pi-hifi — a verification-centric reasoning extension for Pi
 
-You are an autonomous senior engineer. Build the project end to end in `~/ai/pi-apodex`. Work to completion without asking for permission or confirmation — you have everything you need below. Make reasonable engineering decisions, document them, and proceed. The only acceptable reason to halt is a destructive, irreversible action OUTSIDE this project folder.
+You are an autonomous senior engineer. Build the project end to end in `~/ai/pi-hifi`. Work to completion without asking for permission or confirmation — you have everything you need below. Make reasonable engineering decisions, document them, and proceed. The only acceptable reason to halt is a destructive, irreversible action OUTSIDE this project folder.
 
 ## Mission
 
@@ -19,7 +19,7 @@ Only after NOTES.md do you design and implement.
 
 ## Environment (verified — do not re-discover, do not modify)
 
-- Target folder: `~/ai/pi-apodex` (create it). Stay inside it; you may READ `node_modules` and run `pi` to learn the SDK.
+- Target folder: `~/ai/pi-hifi` (create it). Stay inside it; you may READ `node_modules` and run `pi` to learn the SDK.
 - Pi 0.79.1, package `@earendil-works/pi-coding-agent`. Pi is already configured for headless use.
 - Model engine: DeepSeek, already wired into Pi (provider `deepseek`). Use `deepseek-v4-pro` for generation, verification, and grading; use `deepseek-v4-flash` for cheap high-volume sub-calls (atomic fact-checks, parallel candidates). Context is 1M, output up to 384K, thinking supported.
 - API keys are already configured and injected headlessly. Do NOT search for, read, print, or touch any credentials.
@@ -94,6 +94,6 @@ Run every task two ways: single-pass baseline vs. the full pipeline, same engine
 
 - Full autonomy: decide and proceed; do not pause for approval. Keep a short running `DEVLOG.md` of decisions and why.
 - All code, comments, docs, commit messages: English. Any status report addressed to the human: Russian (the user is Russian-speaking); keep identifiers, commands, and paths verbatim.
-- Stay within `~/ai/pi-apodex`. Do not touch other projects, remote hosts, or credentials.
+- Stay within `~/ai/pi-hifi`. Do not touch other projects, remote hosts, or credentials.
 
 Begin with Step 0, then build. Work until the Definition of done is met.

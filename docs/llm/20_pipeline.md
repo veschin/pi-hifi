@@ -1,22 +1,24 @@
 ---
 id: pipeline
 kind: spec
-touches: src/pipeline.ts, src/gvr.ts, src/selector.ts, src/verifier.ts, src/prompts.ts, src/brief.ts, src/context.ts, src/delivery.ts
+touches: src/pipeline.ts, src/triage.ts, src/gvr.ts, src/selector.ts, src/verifier.ts, src/prompts.ts, src/brief.ts, src/context.ts, src/delivery.ts
 ---
 
 # Pipeline contracts
 
 See also: [30_subcall_infra.md](30_subcall_infra.md) · [50_eval.md](50_eval.md) · [90_lessons.md](90_lessons.md).
 
-Stage order (`src/pipeline.ts`): task brief (analyst) -> workspace context
-gathering (scout) -> mode classification -> [code mode, N>1: candidate
-selection] -> GVR loop -> execution evidence for best attempt -> claim-level
-verification -> conditional assembly -> delivery plan + handoff.md. Human-readable method
+Stage order (`src/pipeline.ts`): triage (analyst classifier -> composition
+plan; a `mega` scale early-returns the slice roadmap) -> task brief (analyst)
+-> workspace context gathering (scout) -> mode classification -> [code mode,
+N>1: candidate selection] -> GVR loop -> execution evidence for best attempt
+-> claim-level verification -> conditional assembly -> delivery plan +
+handoff.md. Human-readable method
 description with diagram: README §3 (NOTE: §3 predates the context/delivery
 stages) - this spec holds the *invariants*.
 
-Every progress event is `[stage]`-prefixed (`[team] [context] [classify]
-[select] [gvr] [exec] [verify] [assemble] [deliver]`), the run starts with a
+Every progress event is `[stage]`-prefixed (`[team] [triage] [context]
+[classify] [select] [gvr] [exec] [verify] [assemble] [deliver]`), the run starts with a
 `[team] role=provider/model ...` roster line, and all events are mirrored to
 `progress.jsonl`.
 
@@ -91,7 +93,7 @@ Every progress event is `[stage]`-prefixed (`[team] [context] [classify]
 17. **Brief stage (`src/brief.ts`, 2026-06-12)**: one analyst call (+ one
     bounded re-ask) BEFORE everything else. Outcomes: `questions` /
     `brief-review` pause the run (early return with
-    `ApodexResult.clarification`, run.json status `needs-clarification`,
+    `HifiResult.clarification`, run.json status `needs-clarification`,
     brief.json written, NO final.md/handoff.md); `ready` joins the brief to
     the task as `# Task brief` shared material; `skipped` degrades to a
     warning - the stage must never kill a run. Re-invocation protocol is
@@ -106,6 +108,32 @@ Every progress event is `[stage]`-prefixed (`[team] [context] [classify]
     task text. Acceptance criteria in the materials are mandatory: the
     selftest convention requires one check per criterion and the grader
     treats an unmet criterion as a substantive violation (`prompts.ts`).
+19. **Triage stage (`src/triage.ts`, 3.2a)**: one analyst classification call
+    (+ one bounded re-ask) at the VERY START, gated by `config.triage.enabled`
+    (default on; OFF in the scored eval `run-eval.ts` for comparability with
+    the published runs). It fills a FIXED vocabulary
+    (type/scale/oracle/archRisk/needsDialog/roadmap) - the model picks
+    parameters, this code picks what runs (1.7; the model-driven orchestrator
+    stays rejected). FAIL-SAFE: a malformed, low-confidence, or roadmap-less
+    `mega` classification is coerced toward `needsDialog` (never a silent cheap
+    route); budget/abort propagate, any other failure returns the fail-safe
+    plan. Acted-on gates: (a) `scale === "mega"` early-returns
+    `HifiResult.clarification` of kind `"roadmap"` (slice milestones) with
+    `finalAnswer: ""` - the budget guard, so the candidate/GVR/verify pipeline
+    never fires on a whole system; (b) `needsDialog` BACKSTOP (3.2b,
+    `shouldBackstopDialog`): when the brief stage is OFF, a chat user is
+    reachable, and triage flagged uncertainty, pause with a `"questions"`
+    clarification - the brief stage is the primary dialog, so this only covers
+    the brief-off case (no double-pause). All three clarification exits (mega,
+    brief, backstop) go through ONE `clarReturn` helper. `composition` is
+    recorded on every post-triage exit path (`triage.json` +
+    `HifiResult.composition`). DELIBERATELY NOT acted on: `oracle` (3.2b
+    finding) - pre-skipping exec on `oracle=none` would suppress execution
+    grounding (1.12) whenever triage misclassifies (a cheap model tagged an
+    off-by-one JS fix `oracle=none`), and it is redundant since the exec layer
+    already ships-and-flags non-runnable code; deferred until repo-suite/bench/
+    web grounding exists and the oracle is trustworthy. `archRisk` is deferred to
+    the probe stage (3.6).
 
 ## Open questions (brief stage, accepted 2026-06-12 - to revisit)
 
@@ -145,10 +173,18 @@ Every progress event is `[stage]`-prefixed (`[team] [context] [classify]
   paths, edge cases, boundary validation, swallowed errors, TODO-masking,
   unobserved correctness claims, missing failure modes / rejected
   alternatives (design).
-- Code answers follow the block convention: ```js solution / ```js selftest,
-  selftest imports `./solution.mjs`, covers every stated requirement incl.
+- Code answers follow the fenced block convention `<lang> solution` /
+  `<lang> selftest`; the selftest imports the solution, covers every stated
+  requirement incl.
   abort/error paths, installs process-level leak handlers, exits non-zero on
-  failure. `extractCodeBlocks` (src/exec.ts) parses exactly this convention.
+  failure. **Stack-agnostic by default** (3.5, `config.polyglot`, default on):
+  `generatorSystem(mode, polyglot)` emits the language the task requires; the
+  runnable-language list is derived from `runner.ts` (`runnerHints`, currently
+  js + python) so it cannot drift; languages with no runner ship flagged "not
+  executed" (never refused). With `polyglot` OFF (the eval pin) it forces the
+  legacy `js solution`/`js selftest` (`./solution.mjs`). `parseExperiment`
+  (src/runner.ts) parses any tag; the legacy `extractCodeBlocks` (src/exec.ts,
+  js-only) is used only by the eval scorer (which is JS-pinned).
 - All structured outputs are strict JSON; parsers live in src/json.ts with
   regex fallbacks for machine-reliable fields (see
   [30_subcall_infra.md](30_subcall_infra.md)).

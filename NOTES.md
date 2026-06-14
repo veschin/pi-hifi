@@ -126,7 +126,7 @@ From `pi-ai/dist/models.generated.js` (provider `deepseek`, baseUrl
 - `pi --list-models` confirms `deepseek/deepseek-v4-pro` and `deepseek/deepseek-v4-flash`
   are visible to this install.
 - Existing user extensions live at `~/.pi/agent/extensions/` (symlinks to
-  ~/work/pi-extensions). This project will be loadable both via `pi -e ~/ai/pi-apodex/index.ts`
+  ~/work/pi-extensions). This project will be loadable both via `pi -e ~/ai/pi-hifi/index.ts`
   and via a symlink into `~/.pi/agent/extensions/`.
 - Brave Search key exists in the environment (per task brief) but web verification is out
   of scope for v1; the verifier audits against task-internal evidence only.

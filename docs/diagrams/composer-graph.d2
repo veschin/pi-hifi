@@ -1,0 +1,16 @@
+direction: right
+dag_gen0: Gen
+dag_gen1: Gen
+dag_run0: Run
+dag_run1: Run
+dag_judge: Judge
+dag_audit: Audit
+dag_synth: Synthesize
+mf_final: "Final\nanswer"
+dag_gen0 -> dag_run0
+dag_gen1 -> dag_run1
+dag_run0 -> dag_judge
+dag_run1 -> dag_judge
+dag_judge -> dag_audit
+dag_audit -> dag_synth
+dag_synth -> mf_final

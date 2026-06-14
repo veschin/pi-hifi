@@ -1,5 +1,5 @@
 // Smoke test for the workspace-context + delivery stages: run the pipeline on
-// a repo-grounded question from the pi-apodex repo itself and ASSERT that
+// a repo-grounded question from the pi-hifi repo itself and ASSERT that
 //   1. the scout gathered files and src/json.ts is among them,
 //   2. the final answer is grounded (mentions parseJsonLoose),
 //   3. context.json / delivery.json / handoff.md / progress.jsonl exist,
@@ -9,7 +9,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { loadConfig } from "../src/config.ts";
-import { runApodex } from "../src/pipeline.ts";
+import { runHifi } from "../src/pipeline.ts";
 import { createStandaloneRegistry } from "./standalone.ts";
 
 const TASK = `Using the workspace files, explain how this project extracts JSON from LLM
@@ -25,20 +25,20 @@ function fail(message: string): never {
 async function main(): Promise<void> {
   const env = {
     ...process.env,
-    APODEX_GENERATOR: process.env.APODEX_GENERATOR ?? "deepseek/deepseek-v4-flash",
-    APODEX_GRADER: process.env.APODEX_GRADER ?? "deepseek/deepseek-v4-flash",
-    APODEX_VERIFIER: process.env.APODEX_VERIFIER ?? "deepseek/deepseek-v4-flash",
-    APODEX_WORKER: process.env.APODEX_WORKER ?? "deepseek/deepseek-v4-flash",
+    HIFI_GENERATOR: process.env.HIFI_GENERATOR ?? "deepseek/deepseek-v4-flash",
+    HIFI_GRADER: process.env.HIFI_GRADER ?? "deepseek/deepseek-v4-flash",
+    HIFI_VERIFIER: process.env.HIFI_VERIFIER ?? "deepseek/deepseek-v4-flash",
+    HIFI_WORKER: process.env.HIFI_WORKER ?? "deepseek/deepseek-v4-flash",
     // This smoke asserts the context stage in isolation; the brief stage has
     // its own verification path and would prepend an analyst call here.
-    APODEX_BRIEF_ENABLED: process.env.APODEX_BRIEF_ENABLED ?? "0",
+    HIFI_BRIEF_ENABLED: process.env.HIFI_BRIEF_ENABLED ?? "0",
   };
   const { config, warnings } = loadConfig({ cwd: process.cwd(), env, overrides: { rounds: 1, candidates: 1 } });
 
   const progress: string[] = [];
   const registry = createStandaloneRegistry();
   const t0 = Date.now();
-  const result = await runApodex({
+  const result = await runHifi({
     config,
     configWarnings: warnings,
     registry,

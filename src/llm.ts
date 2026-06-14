@@ -164,6 +164,16 @@ export class SubCallClient {
           } else {
             response = message;
             lastError = "";
+            // Truncation is a SILENT cap otherwise: a `length`-stopped response is
+            // non-empty so it counts as success, but the text is cut off at
+            // maxTokens (e.g. a candidate's code ends mid-function and then fails
+            // its own self-test for the wrong reason). Surface it so the caller
+            // knows to raise the role's maxTokens or narrow the task.
+            if (message.stopReason === "length") {
+              this.opts.onNote?.(
+                `sub-call ${req.label}: output TRUNCATED at maxTokens (stop=length) - the result is cut off; raise the role's maxTokens or narrow the task`,
+              );
+            }
             break; // success
           }
         }

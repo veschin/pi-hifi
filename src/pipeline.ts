@@ -17,6 +17,7 @@ import { extractApprovedBrief, runBriefStage } from "./brief.ts";
 import { contextPackToText, gatherContext } from "./context.ts";
 import { planDelivery, renderHandoff } from "./delivery.ts";
 import { runCandidateSelfTest } from "./exec.ts";
+import { detectSandbox, execAdmission } from "./sandbox.ts";
 import { parseJsonLoose } from "./json.ts";
 import { SubCallClient } from "./llm.ts";
 import {
@@ -27,13 +28,14 @@ import {
 } from "./prompts.ts";
 import { runGvr } from "./gvr.ts";
 import { runSelection } from "./selector.ts";
+import { megaRoadmapClarification, runTriage, shouldBackstopDialog, type CompositionPlan } from "./triage.ts";
 import { atomsReportText, runVerification } from "./verifier.ts";
 import { RoleResolver, type ModelRegistryLike } from "./roles.ts";
 import { RunStore } from "./store.ts";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type {
-  ApodexConfig,
-  ApodexResult,
+  HifiConfig,
+  HifiResult,
   Clarification,
   ContextPack,
   DeliveryPlan,
@@ -47,7 +49,7 @@ import type {
 } from "./types.ts";
 
 export interface PipelineOptions {
-  config: ApodexConfig;
+  config: HifiConfig;
   configWarnings: string[];
   registry: ModelRegistryLike;
   sessionModel?: Model<Api>;
@@ -67,7 +69,7 @@ export interface PipelineOptions {
 
 const VALID_MODES: readonly TaskMode[] = ["design", "code", "incident", "general"];
 
-async function classifyMode(client: SubCallClient, task: string, onProgress?: ProgressFn): Promise<TaskMode> {
+export async function classifyMode(client: SubCallClient, task: string, onProgress?: ProgressFn): Promise<TaskMode> {
   const outcome = await client.call({
     role: "worker",
     label: "classify-mode",
@@ -106,10 +108,10 @@ async function rosterLine(resolver: RoleResolver, roles: readonly RoleName[]): P
   return parts.join(" ");
 }
 
-export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
+export async function runHifi(opts: PipelineOptions): Promise<HifiResult> {
   const task = opts.task.trim();
   if (task === "") {
-    throw new Error("apodex: task must be a non-empty string");
+    throw new Error("pi-hifi: task must be a non-empty string");
   }
 
   const warnings: string[] = [...opts.configWarnings];
@@ -159,6 +161,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
   // Provisional mode; refined by classification inside the try so a mid-run
   // budget stop never erases an already-classified mode.
   let mode: TaskMode = opts.mode === "auto" ? "general" : opts.mode;
+  let composition: CompositionPlan | null = null;
   let briefText: string | null = null;
   let briefSource: "approved" | "generated" | null = null;
   // Task text + generated brief; reused after the try for handoff rendering.
@@ -171,7 +174,71 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
   let finalAnswer = "";
   let budgetExhausted = false;
 
+  // Every clarification pause (mega roadmap, brief questions/review, triage
+  // needs-dialog backstop) returns the SAME shape: finalAnswer "", the plan
+  // recorded, run.json persisted. One helper so the three exit points cannot
+  // drift apart. Reads mode/composition/warnings at call time (closure).
+  const clarReturn = (clarification: Clarification): HifiResult => {
+    const snapshot = budget.snapshot();
+    store.writeJson("run.json", {
+      status: "needs-clarification",
+      runId,
+      clarification,
+      composition,
+      budget: snapshot,
+      warnings,
+      finishedAt: new Date().toISOString(),
+    });
+    return {
+      runId,
+      runDir: store.runDir,
+      task,
+      mode,
+      finalAnswer: "",
+      brief: null,
+      clarification,
+      composition,
+      bestScore: null,
+      gvr: null,
+      selection: null,
+      verification: null,
+      composer: null,
+      contextPack: null,
+      deliveryPlan: null,
+      budget: snapshot,
+      budgetExhausted: false,
+      warnings,
+    };
+  };
+
   try {
+    // --- Stage T: triage (one classification call -> the composition plan) ---
+    // Deterministic gate (1.7): the model fills a fixed vocabulary; this code,
+    // not the model, decides what runs. 3.2a acts on the SCALE knob only - the
+    // oracle/archRisk/needsDialog gates land in later increments.
+    if (opts.config.triage.enabled) {
+      emitProgress("[triage] classifying the task into a composition plan");
+      composition = await runTriage(client, task, emitProgress);
+      store.writeJson("triage.json", composition);
+      emitProgress(
+        `[triage] type=${composition.type} scale=${composition.scale} oracle=${composition.oracle} archRisk=${composition.archRisk} dialog=${composition.needsDialog} conf=${composition.confidence}`,
+      );
+      if (composition.scale === "mega") {
+        // A mega task is never solved in one pass: return the slice roadmap and
+        // let the caller re-invoke on ONE bounded milestone. This is the budget
+        // guard - the full candidate/GVR/verify pipeline never fires on a whole
+        // system, and a misclassified-large task fails toward more work (1.9).
+        // `mode` stays provisional on this path (mode classification is skipped);
+        // `composition.type` is the authoritative task kind for a mega result.
+        emitProgress(
+          `[triage] mega task -> returning ${composition.roadmap.length}-milestone roadmap; not solving in one run`,
+        );
+        return clarReturn(megaRoadmapClarification(composition));
+      }
+    } else {
+      emitProgress("[triage] disabled by config");
+    }
+
     // --- Stage B: task brief (analyst elaboration / approved-brief detection) ---
     if (opts.config.brief.enabled) {
       const approved = extractApprovedBrief(task);
@@ -188,47 +255,22 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
           client,
           task,
           interactive: opts.briefInteractive ?? false,
+          polyglot: opts.config.polyglot,
           onProgress: emitProgress,
         });
         store.writeJson("brief.json", stage);
         if (stage.kind === "questions" || stage.kind === "brief-review") {
-          const clarification: Clarification = {
-            kind: stage.kind,
-            questions: stage.questions,
-            briefDraft: stage.brief,
-          };
           emitProgress(
             stage.kind === "questions"
               ? `[brief] paused: ${stage.questions.length} clarification question(s) for the user`
               : "[brief] paused: draft brief awaits user review",
           );
-          const snapshot = budget.snapshot();
-          store.writeJson("run.json", {
-            status: "needs-clarification",
-            runId,
-            clarification,
-            budget: snapshot,
-            warnings,
-            finishedAt: new Date().toISOString(),
+          return clarReturn({
+            kind: stage.kind,
+            questions: stage.questions,
+            briefDraft: stage.brief,
+            roadmap: [],
           });
-          return {
-            runId,
-            runDir: store.runDir,
-            task,
-            mode,
-            finalAnswer: "",
-            brief: null,
-            clarification,
-            bestScore: null,
-            gvr: null,
-            selection: null,
-            verification: null,
-            contextPack: null,
-            deliveryPlan: null,
-            budget: snapshot,
-            budgetExhausted: false,
-            warnings,
-          };
         }
         if (stage.kind === "ready" && stage.brief !== null) {
           briefText = stage.brief;
@@ -243,6 +285,22 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     } else {
       emitProgress("[brief] disabled by config");
     }
+
+    // needs-dialog backstop (1.9): brief is the primary dialog, so this fires
+    // ONLY when brief is OFF, a user is reachable, and triage flagged the task
+    // uncertain - never silently solve an ambiguous task cheap with no ask path.
+    if (shouldBackstopDialog(composition, opts.config.brief.enabled, opts.briefInteractive ?? false)) {
+      emitProgress("[triage] needs-dialog + brief off + interactive: fail-safe pause for scope clarification");
+      return clarReturn({
+        kind: "questions",
+        questions: [
+          `Triage flagged this task as uncertain (${composition?.rationale || "low confidence"}). Restate the goal, hard constraints, and acceptance criteria, then re-invoke.`,
+        ],
+        briefDraft: null,
+        roadmap: [],
+      });
+    }
+
     // A generated brief is SHARED task material (same isolation rule as the
     // context pack: every role sees the identical text). An approved brief
     // already lives verbatim inside the task text itself.
@@ -283,6 +341,36 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     }
     emitProgress(`[classify] mode: ${mode}`);
 
+    // Sandbox admission gate (code mode): model-generated candidate code runs
+    // only inside the sandbox. With no isolation tier, either run on the BARE
+    // HOST (loud warning - it then has the pipeline's own privileges) or, if the
+    // operator withheld the opt-in, DISABLE self-tests for this run (answers
+    // still ship, flagged "not executed").
+    let execEnabled = opts.config.exec.enabled;
+    if (mode === "code" && execEnabled) {
+      const admission = execAdmission(await detectSandbox(), opts.config.exec.allowUnsandboxed);
+      if (admission === "bare-host") {
+        const w =
+          "[exec] SECURITY: no sandbox tier detected; candidate self-tests will run UNSANDBOXED on the bare host. Install the rootless tier (cgroup v2 + bubblewrap) or set exec.allowUnsandboxed=false to disable.";
+        warnings.push(w);
+        emitProgress(w);
+      } else if (admission === "disabled") {
+        execEnabled = false;
+        const w =
+          '[exec] no sandbox tier and exec.allowUnsandboxed=false; candidate self-tests DISABLED this run (answers ship flagged "not executed").';
+        warnings.push(w);
+        emitProgress(w);
+      }
+    }
+
+    // NOTE: triage's `oracle` field is deliberately NOT acted on here. Acting on
+    // oracle=none to pre-skip exec would suppress execution grounding (1.12) on
+    // genuinely-executable tasks whenever triage misclassifies (observed: a cheap
+    // model tagged an off-by-one JS fix oracle=none), and it is redundant - the
+    // exec layer already ships-and-flags non-runnable code (runCandidateSelfTest
+    // -> ran:false + reason). Oracle routing is deferred until repo-suite/bench/
+    // web grounding exists and triage's oracle is trustworthy. See handoff.
+
     // --- Stage 1: candidates + causal selection (code mode with N > 1) ---
     let seedAttempt: string | undefined;
     if (mode === "code" && opts.config.candidates > 1) {
@@ -292,8 +380,9 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
         task: materials,
         mode,
         candidates: opts.config.candidates,
-        execEnabled: opts.config.exec.enabled,
+        execEnabled,
         execTimeoutMs: opts.config.exec.timeoutMs,
+        polyglot: opts.config.polyglot,
         onProgress: emitProgress,
       });
       store.writeJson("selection.json", selection);
@@ -302,7 +391,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     }
 
     // --- Stage 2: GVR (with per-round exec probe in code mode) ---
-    const execProbeEnabled = mode === "code" && opts.config.exec.enabled;
+    const execProbeEnabled = mode === "code" && execEnabled;
     emitProgress(`[gvr] stage start: up to ${opts.config.rounds} rounds, early stop at ${opts.config.scoreThreshold}`);
     gvr = await runGvr({
       client,
@@ -310,6 +399,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
       mode,
       rounds: opts.config.rounds,
       scoreThreshold: opts.config.scoreThreshold,
+      polyglot: opts.config.polyglot,
       ...(seedAttempt !== undefined ? { seedAttempt } : {}),
       ...(execProbeEnabled
         ? { execProbe: (attempt: string) => runCandidateSelfTest(attempt, opts.config.exec.timeoutMs) }
@@ -347,7 +437,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
           bestExecEvidence = winner.execEvidence;
         }
       }
-      if (!bestExecEvidence && opts.config.exec.enabled) {
+      if (!bestExecEvidence && execEnabled) {
         emitProgress("[exec] running self-test of the final attempt");
         bestExecEvidence = await runCandidateSelfTest(finalAnswer, opts.config.exec.timeoutMs);
         store.writeJson("final-selftest.json", bestExecEvidence);
@@ -433,7 +523,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     }
   }
 
-  const result: ApodexResult = {
+  const result: HifiResult = {
     runId,
     runDir: store.runDir,
     task,
@@ -441,10 +531,12 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     finalAnswer,
     brief: briefText,
     clarification: null,
+    composition,
     bestScore: gvr?.best.critique?.score ?? null,
     gvr,
     selection,
     verification,
+    composer: null,
     contextPack,
     deliveryPlan,
     budget: budget.snapshot(),
@@ -462,6 +554,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
       mode,
       bestScore: result.bestScore,
       verification,
+      composer: null,
       contextPack,
       deliveryPlan,
       budget: result.budget,
@@ -472,6 +565,7 @@ export async function runApodex(opts: PipelineOptions): Promise<ApodexResult> {
     status: budgetExhausted ? "budget-exhausted" : "completed",
     runId,
     mode: result.mode,
+    triageScale: composition?.scale ?? null,
     bestScore: result.bestScore,
     brief: briefSource,
     earlyStopped: gvr?.earlyStopped ?? false,

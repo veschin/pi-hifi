@@ -1,0 +1,9 @@
+direction: right
+host_user: Agent
+dag_build: Build
+j_hifi: hifi
+mf_piece: "Verified\npiece"
+host_user -> dag_build
+dag_build -> j_hifi: "hard\npiece"
+j_hifi -> mf_piece
+mf_piece -> dag_build: "drop in"

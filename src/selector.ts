@@ -36,6 +36,8 @@ export interface SelectorOptions {
   candidates: number;
   execEnabled: boolean;
   execTimeoutMs: number;
+  /** Stack-agnostic generation (3.5); default false = legacy JS convention. */
+  polyglot?: boolean;
   onProgress?: ProgressFn;
 }
 
@@ -53,7 +55,12 @@ interface RawVerdict {
 
 const AXIS_VALUES = ["a", "b", "tie"] as const;
 
-function parseVerdict(text: string): Omit<PairVerdict, "a" | "b"> | null {
+/**
+ * Parse a judge verdict (strict JSON first, per-field regex fallback second).
+ * Exported so the `judge` work-primitive (src/primitives.ts) reuses the exact
+ * same parser the linear selector uses - one judging contract, not two.
+ */
+export function parseVerdict(text: string): Omit<PairVerdict, "a" | "b"> | null {
   // Strict JSON parse first; per-field regex fallback second (a judge once
   // emitted an unescaped quote inside its rationale - the axis verdicts
   // themselves are machine-reliable).
@@ -84,7 +91,7 @@ function parseVerdict(text: string): Omit<PairVerdict, "a" | "b"> | null {
 
 async function generateCandidates(opts: SelectorOptions): Promise<Candidate[]> {
   opts.onProgress?.(`[select] generating ${opts.candidates} candidates in parallel`);
-  const system = generatorSystem(opts.mode);
+  const system = generatorSystem(opts.mode, opts.polyglot ?? false);
   const user = generatorUser(opts.task);
 
   // allSettled (not all): every lane is awaited before inspection, so a

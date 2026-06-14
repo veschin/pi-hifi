@@ -1,6 +1,6 @@
 // Code bucket: non-trivial implementation tasks with hidden deterministic tests.
 // The hidden test is never shown to either arm; it imports ./solution.mjs and
-// prints "APODEX_TESTS <passed>/<total>".
+// prints "HIFI_TESTS <passed>/<total>".
 
 import { scoreCodeWithHiddenTest } from "../scoring.ts";
 import type { EvalTask } from "../types.ts";
@@ -36,7 +36,7 @@ let passed = 0;
 // Report after every check and on crashes: a solution that dies mid-suite
 // (uncaught throw / unhandled rejection) keeps partial credit for checks that
 // objectively passed; the scorer reads the LAST report line.
-function report() { console.log(\`APODEX_TESTS \${passed}/\${TOTAL}\`); }
+function report() { console.log(\`HIFI_TESTS \${passed}/\${TOTAL}\`); }
 process.on("uncaughtException", (e) => { console.log("CRASH " + (e && e.message)); report(); process.exit(1); });
 process.on("unhandledRejection", (e) => { console.log("UNHANDLED_REJECTION " + (e && e.message)); report(); process.exit(1); });
 function eq(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
@@ -108,7 +108,7 @@ ${OUTPUT_NOTE}`;
 const retryHiddenTest = `import { retry } from "./solution.mjs";
 const TOTAL = 10;
 let passed = 0;
-function report() { console.log(\`APODEX_TESTS \${passed}/\${TOTAL}\`); }
+function report() { console.log(\`HIFI_TESTS \${passed}/\${TOTAL}\`); }
 process.on("uncaughtException", (e) => { console.log("CRASH " + (e && e.message)); report(); process.exit(1); });
 process.on("unhandledRejection", (e) => { console.log("UNHANDLED_REJECTION " + (e && e.message)); report(); process.exit(1); });
 async function check(name, fn) {
@@ -244,7 +244,7 @@ ${OUTPUT_NOTE}`;
 const lruHiddenTest = `import { AsyncLruCache } from "./solution.mjs";
 const TOTAL = 9;
 let passed = 0;
-function report() { console.log(\`APODEX_TESTS \${passed}/\${TOTAL}\`); }
+function report() { console.log(\`HIFI_TESTS \${passed}/\${TOTAL}\`); }
 process.on("uncaughtException", (e) => { console.log("CRASH " + (e && e.message)); report(); process.exit(1); });
 process.on("unhandledRejection", (e) => { console.log("UNHANDLED_REJECTION " + (e && e.message)); report(); process.exit(1); });
 async function check(name, fn) {

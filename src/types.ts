@@ -1,7 +1,10 @@
-// Core domain types for the apodex pipeline.
+// Core domain types for the pi-hifi pipeline.
 // All sub-call I/O is single-turn: one system prompt + one user message per call.
 
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
+// Type-only import (fully erased at runtime - no import cycle with triage.ts,
+// which only type-imports from here).
+import type { CompositionPlan } from "./triage.ts";
 
 export type RoleName = "analyst" | "generator" | "grader" | "verifier" | "worker" | "judge" | "scout";
 
@@ -37,6 +40,22 @@ export interface BriefConfig {
   enabled: boolean;
 }
 
+/** Triage stage (one classification call -> the CompositionPlan that gates the run). */
+export interface TriageConfig {
+  /** Run the triage classifier at the very start of every run. */
+  enabled: boolean;
+}
+
+/** Composer path (decompose -> work-primitive DAG) vs the linear runHifi middle. */
+export interface ComposerConfig {
+  /**
+   * Run the work-primitive composer (decompose -> gated parallel DAG) as the
+   * execution path instead of the linear select/GVR/verify/assemble middle.
+   * Default FALSE: runHifi stays the path until the composer reaches parity.
+   */
+  enabled: boolean;
+}
+
 /** Workspace context-gathering stage (scout request-read loop). */
 export interface ContextConfig {
   enabled: boolean;
@@ -52,7 +71,7 @@ export interface ContextConfig {
   maxListingEntries: number;
 }
 
-export interface ApodexConfig {
+export interface HifiConfig {
   roles: Record<RoleName, RoleSpec>;
   /** K - GVR rounds (grade cycles), clamped to 1..10. */
   rounds: number;
@@ -62,13 +81,30 @@ export interface ApodexConfig {
   scoreThreshold: number;
   budget: BudgetConfig;
   exec: {
-    /** Run candidate self-tests with node in a tempdir (code mode). */
+    /** Run candidate self-tests (code mode) - sandboxed when a tier exists. */
     enabled: boolean;
     timeoutMs: number;
+    /**
+     * Allow candidate self-tests to run UNSANDBOXED on the bare host when no
+     * isolation tier exists. Default FALSE (secure by default / fail-closed: the
+     * pipeline refuses to run model-generated code without a sandbox, shipping
+     * the answer flagged "not executed"). Set true to opt INTO bare-host
+     * execution on a tier-less host (the pipeline then warns loudly each run).
+     */
+    allowUnsandboxed: boolean;
   };
+  triage: TriageConfig;
   brief: BriefConfig;
   context: ContextConfig;
   delivery: DeliveryConfig;
+  composer: ComposerConfig;
+  /**
+   * Stack-agnostic code generation (3.5): when true the generator emits the
+   * language the task requires (`<lang> solution`/`<lang> selftest`); when false
+   * it forces the legacy JS convention. Default true; the eval pins it false for
+   * comparability with the published JS runs.
+   */
+  polyglot: boolean;
   /** Base directory for run artifacts (absolute, or relative to cwd). */
   runsDir: string;
 }
@@ -268,16 +304,35 @@ export interface DeliveryPlan {
 
 /** Early-stop payload: the run paused for user input before any solution work. */
 export interface Clarification {
-  kind: "questions" | "brief-review";
+  kind: "questions" | "brief-review" | "roadmap";
   /** Blocking questions (kind=questions). */
   questions: string[];
   /** Draft brief awaiting user approval (kind=brief-review). */
   briefDraft: string | null;
+  /** Ordered milestones of a mega task (kind=roadmap); empty for other kinds. */
+  roadmap: string[];
 }
 
 // --- Pipeline ---
 
-export interface ApodexResult {
+/**
+ * Composer-path run summary: the grounding signal of a work-primitive DAG run -
+ * the analog of the linear path's grader/gvr/verification cluster. Surfaced in the
+ * user-facing delivery so the composer path reports its OWN evidence instead of the
+ * linear fields it never populates (which would otherwise render as dead "n/a").
+ */
+export interface ComposerSummary {
+  /** Whole-run hifi: every executed order passed its observation gate. */
+  hifi: boolean;
+  /** Total work-orders in the executed graph. */
+  orderCount: number;
+  /** Orders skipped or whose gate flagged (surfaced, never silently dropped). */
+  flaggedCount: number;
+  /** Parallel gen candidates the decompose stage planned (graph width / lanes). */
+  depth: number;
+}
+
+export interface HifiResult {
   runId: string;
   runDir: string;
   task: string;
@@ -287,10 +342,14 @@ export interface ApodexResult {
   brief: string | null;
   /** Set when the run paused for clarification; finalAnswer is "" then. */
   clarification: Clarification | null;
+  /** Triage classification of the task, when the triage stage ran. */
+  composition: CompositionPlan | null;
   bestScore: number | null;
   gvr: GvrResult | null;
   selection: SelectionResult | null;
   verification: VerificationReport | null;
+  /** Composer-path run summary (work-primitive DAG); null on the linear path. */
+  composer: ComposerSummary | null;
   contextPack: ContextPack | null;
   deliveryPlan: DeliveryPlan | null;
   budget: BudgetSnapshot;

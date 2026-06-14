@@ -4,6 +4,7 @@
 // artifacts - never another agent's reasoning trace or a reference answer.
 
 import type { TaskMode } from "./types.ts";
+import { runnerHints } from "./runner.ts";
 
 export const HIFI_RUBRIC = `Score a candidate DOWN when it exhibits any of these failures:
 1. Error paths unhandled - only the happy path is covered.
@@ -41,7 +42,33 @@ const CODE_OUTPUT_CONVENTION = `Output convention for code answers (MANDATORY):
   criterion counts as unverified.
 - After the blocks, explain the approach, edge cases covered, and limitations.`;
 
-export function generatorSystem(mode: TaskMode): string {
+/**
+ * Stack-agnostic code convention (3.5): the generator emits the language the
+ * task requires, not forced JS. Languages with a local runner are EXECUTED;
+ * others ship flagged "not executed". The runnable-language list is derived from
+ * the runner (runnerHints) so it cannot drift. Gated by config.polyglot (default
+ * on; the eval pins it OFF for comparability with the published JS runs).
+ */
+function polyglotCodeConvention(): string {
+  return `Output convention for code answers (MANDATORY):
+- Use the language the task requires. Do NOT downgrade to another language just to
+  make it runnable. Put the complete solution in ONE fenced block tagged exactly
+  \`\`\`<lang> solution and a self-contained test in ONE block tagged \`\`\`<lang> selftest.
+- Languages with a LOCAL RUNNER (the selftest is EXECUTED as hard evidence): ${runnerHints()}.
+  For these the selftest MUST import/load the solution and exercise EVERY stated
+  requirement - one check per behavior incl. error paths, abort/cancellation,
+  validation throws, boundary sizes, empty/null input - exit non-zero on any failed
+  check AND on any unhandled error/exception, print what each check covers, and run
+  standalone (no installs, no network, no external files).
+- A language WITHOUT a local runner (browser/HTML, GPU, Go, ...) is STILL delivered
+  in the correct language with a matching selftest block; it ships flagged "not
+  executed" - the artifact is the deliverable, execution is a bonus, never a gate.
+- When the task materials contain an "Acceptance criteria" section, the selftest
+  must include at least one check per criterion, in order, printing the number.
+- After the blocks, explain the approach, edge cases covered, and limitations.`;
+}
+
+export function generatorSystem(mode: TaskMode, polyglot = false): string {
   const base = `You are a senior engineer producing a single, complete, high-fidelity answer to the task.
 
 Quality bar (you will be graded against it):
@@ -54,7 +81,7 @@ Rules:
 - No placeholder/TODO content presented as done.
 - Be complete but not padded; every section must carry signal.`;
   if (mode === "code") {
-    return `${base}\n\n${CODE_OUTPUT_CONVENTION}`;
+    return `${base}\n\n${polyglot ? polyglotCodeConvention() : CODE_OUTPUT_CONVENTION}`;
   }
   if (mode === "design") {
     return `${base}\n\nDesign answers must articulate: requirements/constraints as understood, the chosen architecture, failure modes and how each is handled, scaling limits, and at least one rejected alternative with the concrete reason for rejection.`;
@@ -423,18 +450,32 @@ ${task}
 ${answer}`;
 }
 
-export const ANALYST_SYSTEM = `You are the task analyst opening an engineering task-force run. You turn a raw
+/** Polyglot-aware code-deliverable scope line for the analyst (3.5): it MUST
+ *  agree with the generator convention, else the analyst constrains a non-JS
+ *  task to JS while the generator is free to emit the right language. */
+function analystCodeDeliverable(polyglot: boolean): string {
+  return polyglot
+    ? `- Code answers are ONE self-contained solution plus a self-test in the LANGUAGE
+  THE TASK REQUIRES. Languages with a local runner (js, python) are EXECUTED (the
+  pipeline's strongest signal); others (browser/GPU/Go/...) ship flagged "not
+  executed" - do NOT downgrade the language, but flag when execution verification
+  will be unavailable. No npm installs, no network, no external files.`
+    : `- Code answers are ONE self-contained JavaScript solution plus a self-test
+  runnable with plain "node selftest.mjs" - no npm installs, no network, no
+  external files, no GUI/browser/game-engine runtime. Code that cannot be
+  exercised that way loses execution verification (the pipeline's strongest
+  signal) - steer scope toward node-verifiable slices.`;
+}
+
+export function analystSystem(polyglot = false): string {
+  return `You are the task analyst opening an engineering task-force run. You turn a raw
 user task into a reviewed brief BEFORE any solution work starts: understand the
 real use case, surface what is unclear, pin down what "done" means. You never
 solve the task yourself.
 
 What the pipeline behind you can deliver - negotiate scope ONLY within this:
 - One verified ANSWER per run: a design, a diagnosis, an explanation, or code.
-- Code answers are ONE self-contained JavaScript solution plus a self-test
-  runnable with plain "node selftest.mjs" - no npm installs, no network, no
-  external files, no GUI/browser/game-engine runtime. Code that cannot be
-  exercised that way loses execution verification (the pipeline's strongest
-  signal) - steer scope toward node-verifiable slices.
+${analystCodeDeliverable(polyglot)}
 - The pipeline never edits the user's workspace; it returns the answer plus
   apply steps for the calling agent.
 - One run = one module-sized deliverable. A project-sized request must be
@@ -487,6 +528,7 @@ Return ONLY a JSON object, no markdown fences:
  "questions": ["<question - why it blocks>", ...],
  "complexity": "trivial" | "standard",
  "brief": "<the full markdown brief, or empty string when status=questions>"}`;
+}
 
 export function analystUser(task: string, interactive: boolean, answersPresent: boolean): string {
   const mode = interactive

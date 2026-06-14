@@ -1,7 +1,7 @@
 {
-  "name": "pi-apodex",
+  "name": "pi-hifi",
   "version": "0.1.0",
-  "description": "Verification-centric deep-reasoning extension for Pi: GVR loops, external verifier, causal candidate selection, evidence-disciplined answers",
+  "description": "pi-hifi: verification-centric inference-time reasoning extension for Pi - triage-gated composition, stack-agnostic sandboxed execution, GVR loops, external verifier, causal candidate selection (the 'apodex' validate+select step), evidence-disciplined answers",
   "type": "module",
   "private": true,
   "pi": {
