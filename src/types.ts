@@ -1,4 +1,4 @@
-// Core domain types for the apodex pipeline.
+// Core domain types for the pi-hifi pipeline.
 // All sub-call I/O is single-turn: one system prompt + one user message per call.
 
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";

@@ -27,19 +27,19 @@ function line(label: string, ok: boolean, detail: string): boolean {
 async function arm(allowUnsandboxed: boolean): Promise<{ warnings: string[]; answerLen: number }> {
   const env = {
     ...process.env,
-    APODEX_GENERATOR: "deepseek/deepseek-v4-flash",
-    APODEX_GRADER: "deepseek/deepseek-v4-flash",
-    APODEX_VERIFIER: "deepseek/deepseek-v4-flash",
-    APODEX_WORKER: "deepseek/deepseek-v4-flash",
-    APODEX_JUDGE: "deepseek/deepseek-v4-flash",
-    APODEX_TRIAGE_ENABLED: "0",
-    APODEX_BRIEF_ENABLED: "0",
-    APODEX_CONTEXT_ENABLED: "0",
-    APODEX_DELIVERY_PLAN: "0",
-    APODEX_EXEC_ALLOW_UNSANDBOXED: allowUnsandboxed ? "1" : "0",
-    APODEX_MAX_SUBCALLS: "15",
-    APODEX_MAX_COST_USD: "0.5",
-    APODEX_MAX_WALL_TIME_MS: "180000",
+    HIFI_GENERATOR: "deepseek/deepseek-v4-flash",
+    HIFI_GRADER: "deepseek/deepseek-v4-flash",
+    HIFI_VERIFIER: "deepseek/deepseek-v4-flash",
+    HIFI_WORKER: "deepseek/deepseek-v4-flash",
+    HIFI_JUDGE: "deepseek/deepseek-v4-flash",
+    HIFI_TRIAGE_ENABLED: "0",
+    HIFI_BRIEF_ENABLED: "0",
+    HIFI_CONTEXT_ENABLED: "0",
+    HIFI_DELIVERY_PLAN: "0",
+    HIFI_EXEC_ALLOW_UNSANDBOXED: allowUnsandboxed ? "1" : "0",
+    HIFI_MAX_SUBCALLS: "15",
+    HIFI_MAX_COST_USD: "0.5",
+    HIFI_MAX_WALL_TIME_MS: "180000",
   };
   const { config, warnings } = loadConfig({ cwd: process.cwd(), env, overrides: { rounds: 1, candidates: 1 } });
   const registry = createStandaloneRegistry();
@@ -62,7 +62,7 @@ async function arm(allowUnsandboxed: boolean): Promise<{ warnings: string[]; ans
 
 async function main(): Promise<void> {
   // __setSandboxTier is a guarded test-only hook; authorize it for this smoke.
-  process.env.APODEX_TEST_HOOKS = "1";
+  process.env.HIFI_TEST_HOOKS = "1";
   const results: boolean[] = [];
 
   console.log("== arm: allowUnsandboxed=false (must DISABLE exec) ==");

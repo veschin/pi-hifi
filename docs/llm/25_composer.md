@@ -15,7 +15,7 @@ Status (2026-06-14): the primitive layer (`src/primitives.ts`), the composer
 (`src/composer.ts`), `decompose` (`src/decompose.ts`) and the pipeline wiring
 (`src/composer-pipeline.ts`) are BUILT and tested. The composer is the DEFAULT
 execution path (`config.composer.enabled` default true); `runHifi`
-(20_pipeline.md) is the reversible fallback (`APODEX_COMPOSER=0`), pinned OFF in
+(20_pipeline.md) is the reversible fallback (`HIFI_COMPOSER=0`), pinned OFF in
 the eval for comparability. Proven LIVE across code/design/incident/general
 (`eval/smoke-composer.ts`), with workspace context grounding the answer.
 
@@ -155,7 +155,7 @@ gen specs) yet - not needed to prove the canonical chain.
 ## Pipeline wiring (`src/composer-pipeline.ts`)
 
 `runComposerHifi` is the composer EXECUTION PATH, selected by
-`config.composer.enabled` (default TRUE, env `APODEX_COMPOSER=0` to fall back,
+`config.composer.enabled` (default TRUE, env `HIFI_COMPOSER=0` to fall back,
 file `composer.enabled`). `index.ts` dispatches `config.composer.enabled ?
 runComposerHifi : runHifi`; both take the same options and return a `HifiResult`,
 so clarification rendering is identical downstream. Delivery rendering is

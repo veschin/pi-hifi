@@ -17,7 +17,7 @@ smart model, hifi encoded as per-task non-functional requirements + criteria.
 
 ## What was built
 
-- `analyst` role (session-heavy, thinking high, `APODEX_ANALYST`).
+- `analyst` role (session-heavy, thinking high, `HIFI_ANALYST`).
 - `src/brief.ts`: one analyst call + bounded re-ask -> questions /
   brief-review / ready / skipped. Stateless re-invocation protocol via task
   text markers (`# Clarification answers`, `# Approved brief`).
@@ -30,7 +30,7 @@ smart model, hifi encoded as per-task non-functional requirements + criteria.
   high (JudgeBench: flash-class judges below random on hard pairs). Scout
   still mirrors the worker.
 - Eval protocol pin 2: brief off + judge pinned flash in run-eval.ts; both
-  smokes pin `APODEX_BRIEF_ENABLED=0`.
+  smokes pin `HIFI_BRIEF_ENABLED=0`.
 
 ## Verified
 

@@ -24,7 +24,7 @@ export function defaultConfig(): HifiConfig {
       // flash-class judges score below random on hard pairs (survey §3.6).
       judge: { model: SESSION_MODEL, thinking: "high", temperature: 0, maxTokens: 8192 },
       // scout mirrors the (possibly overridden) worker spec unless set
-      // explicitly via .apodex.json or APODEX_SCOUT - see loadConfig step 3.5.
+      // explicitly via .apodex.json or HIFI_SCOUT - see loadConfig step 3.5.
       scout: { model: DEFAULT_WORKER_MODEL, thinking: "off", temperature: 0, maxTokens: 8192 },
     },
     rounds: 4,
@@ -52,7 +52,7 @@ export function defaultConfig(): HifiConfig {
     delivery: { planEnabled: true },
     // The work-primitive composer is the DEFAULT execution path (the designed
     // architecture). The linear runHifi middle remains reachable as a reversible
-    // fallback via composer.enabled=false (env APODEX_COMPOSER=0). The eval pins
+    // fallback via composer.enabled=false (env HIFI_COMPOSER=0). The eval pins
     // it OFF explicitly for comparability with the published linear-pipeline runs.
     composer: { enabled: true },
     polyglot: true,
@@ -202,26 +202,36 @@ export interface LoadedConfig {
 }
 
 /**
- * Effective config = defaults <- .apodex.json (cwd) <- env APODEX_* <- inline overrides,
+ * Effective config = defaults <- .apodex.json (cwd) <- env HIFI_* <- inline overrides,
  * then clamped. Order matters: explicit beats ambient.
  */
 export function loadConfig(opts: LoadConfigOptions): LoadedConfig {
   const warnings: string[] = [];
-  const env = opts.env ?? process.env;
+  // Env prefix migration: HIFI_* is canonical; APODEX_* is the deprecated
+  // fallback (the pre-rename name) and stays working. Mirror any APODEX_<k> into
+  // the HIFI_<k> slot the reads below use, unless HIFI_<k> is explicitly set.
+  const rawEnv = opts.env ?? process.env;
+  const env: Record<string, string | undefined> = { ...rawEnv };
+  for (const k of Object.keys(rawEnv)) {
+    if (k.startsWith("APODEX_") && env[`HIFI_${k.slice(7)}`] === undefined) {
+      env[`HIFI_${k.slice(7)}`] = rawEnv[k];
+    }
+  }
   const config = defaultConfig();
   // Roles whose MODEL was set explicitly and validly (file or env);
   // judge/scout without an explicit model mirror the FINAL worker model so
   // "make the worker cheaper" does not silently leave them on the old model.
   const explicitModelRoles = new Set<RoleName>();
 
-  // 1. Project file.
-  const fileConfig = readJsonFile(path.join(opts.cwd, ".apodex.json"), warnings);
+  // 1. Project file (.hifi.json; .apodex.json is the deprecated fallback name).
+  const configFileName = fs.existsSync(path.join(opts.cwd, ".hifi.json")) ? ".hifi.json" : ".apodex.json";
+  const fileConfig = readJsonFile(path.join(opts.cwd, configFileName), warnings);
   if (fileConfig) {
     const roles = fileConfig.roles;
     if (typeof roles === "object" && roles !== null && !Array.isArray(roles)) {
       for (const role of ["analyst", "generator", "grader", "verifier", "worker", "judge", "scout"] as RoleName[]) {
         const value = (roles as Record<string, unknown>)[role];
-        if (value !== undefined && applyRoleOverride(config.roles, role, value, ".apodex.json", warnings)) {
+        if (value !== undefined && applyRoleOverride(config.roles, role, value, configFileName, warnings)) {
           explicitModelRoles.add(role);
         }
       }
@@ -289,13 +299,13 @@ export function loadConfig(opts: LoadConfigOptions): LoadedConfig {
 
   // 2. Environment.
   const envRole: Array<[RoleName, string]> = [
-    ["analyst", "APODEX_ANALYST"],
-    ["generator", "APODEX_GENERATOR"],
-    ["grader", "APODEX_GRADER"],
-    ["verifier", "APODEX_VERIFIER"],
-    ["worker", "APODEX_WORKER"],
-    ["judge", "APODEX_JUDGE"],
-    ["scout", "APODEX_SCOUT"],
+    ["analyst", "HIFI_ANALYST"],
+    ["generator", "HIFI_GENERATOR"],
+    ["grader", "HIFI_GRADER"],
+    ["verifier", "HIFI_VERIFIER"],
+    ["worker", "HIFI_WORKER"],
+    ["judge", "HIFI_JUDGE"],
+    ["scout", "HIFI_SCOUT"],
   ];
   for (const [role, key] of envRole) {
     const value = env[key];
@@ -304,9 +314,9 @@ export function loadConfig(opts: LoadConfigOptions): LoadedConfig {
     }
   }
   const envNum: Array<[keyof Pick<HifiConfig, "rounds" | "candidates" | "scoreThreshold">, string]> = [
-    ["rounds", "APODEX_ROUNDS"],
-    ["candidates", "APODEX_CANDIDATES"],
-    ["scoreThreshold", "APODEX_SCORE_THRESHOLD"],
+    ["rounds", "HIFI_ROUNDS"],
+    ["candidates", "HIFI_CANDIDATES"],
+    ["scoreThreshold", "HIFI_SCORE_THRESHOLD"],
   ];
   for (const [key, envKey] of envNum) {
     const n = numberFrom(env[envKey]);
@@ -314,56 +324,56 @@ export function loadConfig(opts: LoadConfigOptions): LoadedConfig {
     else if (env[envKey] !== undefined) warnings.push(`config(${envKey}): not a number; ignored`);
   }
   const envBudget: Array<[keyof HifiConfig["budget"], string]> = [
-    ["maxSubCalls", "APODEX_MAX_SUBCALLS"],
-    ["maxTotalTokens", "APODEX_MAX_TOTAL_TOKENS"],
-    ["maxCostUsd", "APODEX_MAX_COST_USD"],
-    ["maxWallTimeMs", "APODEX_MAX_WALL_TIME_MS"],
-    ["subCallTimeoutMs", "APODEX_SUBCALL_TIMEOUT_MS"],
-    ["subCallMaxRetries", "APODEX_SUBCALL_MAX_RETRIES"],
+    ["maxSubCalls", "HIFI_MAX_SUBCALLS"],
+    ["maxTotalTokens", "HIFI_MAX_TOTAL_TOKENS"],
+    ["maxCostUsd", "HIFI_MAX_COST_USD"],
+    ["maxWallTimeMs", "HIFI_MAX_WALL_TIME_MS"],
+    ["subCallTimeoutMs", "HIFI_SUBCALL_TIMEOUT_MS"],
+    ["subCallMaxRetries", "HIFI_SUBCALL_MAX_RETRIES"],
   ];
   for (const [key, envKey] of envBudget) {
     const n = numberFrom(env[envKey]);
     if (n !== null) config.budget[key] = n;
     else if (env[envKey] !== undefined) warnings.push(`config(${envKey}): not a number; ignored`);
   }
-  if (env.APODEX_EXEC_ENABLED !== undefined) {
-    config.exec.enabled = env.APODEX_EXEC_ENABLED !== "0" && env.APODEX_EXEC_ENABLED !== "false";
+  if (env.HIFI_EXEC_ENABLED !== undefined) {
+    config.exec.enabled = env.HIFI_EXEC_ENABLED !== "0" && env.HIFI_EXEC_ENABLED !== "false";
   }
-  if (env.APODEX_EXEC_ALLOW_UNSANDBOXED !== undefined) {
+  if (env.HIFI_EXEC_ALLOW_UNSANDBOXED !== undefined) {
     config.exec.allowUnsandboxed =
-      env.APODEX_EXEC_ALLOW_UNSANDBOXED !== "0" && env.APODEX_EXEC_ALLOW_UNSANDBOXED !== "false";
+      env.HIFI_EXEC_ALLOW_UNSANDBOXED !== "0" && env.HIFI_EXEC_ALLOW_UNSANDBOXED !== "false";
   }
-  if (env.APODEX_CONTEXT_ENABLED !== undefined) {
-    config.context.enabled = env.APODEX_CONTEXT_ENABLED !== "0" && env.APODEX_CONTEXT_ENABLED !== "false";
+  if (env.HIFI_CONTEXT_ENABLED !== undefined) {
+    config.context.enabled = env.HIFI_CONTEXT_ENABLED !== "0" && env.HIFI_CONTEXT_ENABLED !== "false";
   }
-  if (env.APODEX_DELIVERY_PLAN !== undefined) {
-    config.delivery.planEnabled = env.APODEX_DELIVERY_PLAN !== "0" && env.APODEX_DELIVERY_PLAN !== "false";
+  if (env.HIFI_DELIVERY_PLAN !== undefined) {
+    config.delivery.planEnabled = env.HIFI_DELIVERY_PLAN !== "0" && env.HIFI_DELIVERY_PLAN !== "false";
   }
-  if (env.APODEX_POLYGLOT !== undefined) {
-    config.polyglot = env.APODEX_POLYGLOT !== "0" && env.APODEX_POLYGLOT !== "false";
+  if (env.HIFI_POLYGLOT !== undefined) {
+    config.polyglot = env.HIFI_POLYGLOT !== "0" && env.HIFI_POLYGLOT !== "false";
   }
-  if (env.APODEX_TRIAGE_ENABLED !== undefined) {
-    config.triage.enabled = env.APODEX_TRIAGE_ENABLED !== "0" && env.APODEX_TRIAGE_ENABLED !== "false";
+  if (env.HIFI_TRIAGE_ENABLED !== undefined) {
+    config.triage.enabled = env.HIFI_TRIAGE_ENABLED !== "0" && env.HIFI_TRIAGE_ENABLED !== "false";
   }
-  if (env.APODEX_BRIEF_ENABLED !== undefined) {
-    config.brief.enabled = env.APODEX_BRIEF_ENABLED !== "0" && env.APODEX_BRIEF_ENABLED !== "false";
+  if (env.HIFI_BRIEF_ENABLED !== undefined) {
+    config.brief.enabled = env.HIFI_BRIEF_ENABLED !== "0" && env.HIFI_BRIEF_ENABLED !== "false";
   }
-  if (env.APODEX_COMPOSER !== undefined) {
-    config.composer.enabled = env.APODEX_COMPOSER !== "0" && env.APODEX_COMPOSER !== "false";
+  if (env.HIFI_COMPOSER !== undefined) {
+    config.composer.enabled = env.HIFI_COMPOSER !== "0" && env.HIFI_COMPOSER !== "false";
   }
   const envContext: Array<[keyof Omit<HifiConfig["context"], "enabled">, string]> = [
-    ["maxRounds", "APODEX_CONTEXT_MAX_ROUNDS"],
-    ["maxFiles", "APODEX_CONTEXT_MAX_FILES"],
-    ["maxFileBytes", "APODEX_CONTEXT_MAX_FILE_BYTES"],
-    ["maxTotalBytes", "APODEX_CONTEXT_MAX_TOTAL_BYTES"],
-    ["maxListingEntries", "APODEX_CONTEXT_MAX_LISTING"],
+    ["maxRounds", "HIFI_CONTEXT_MAX_ROUNDS"],
+    ["maxFiles", "HIFI_CONTEXT_MAX_FILES"],
+    ["maxFileBytes", "HIFI_CONTEXT_MAX_FILE_BYTES"],
+    ["maxTotalBytes", "HIFI_CONTEXT_MAX_TOTAL_BYTES"],
+    ["maxListingEntries", "HIFI_CONTEXT_MAX_LISTING"],
   ];
   for (const [key, envKey] of envContext) {
     const n = numberFrom(env[envKey]);
     if (n !== null) config.context[key] = n;
     else if (env[envKey] !== undefined) warnings.push(`config(${envKey}): not a number; ignored`);
   }
-  if (env.APODEX_RUNS_DIR) config.runsDir = env.APODEX_RUNS_DIR;
+  if (env.HIFI_RUNS_DIR) config.runsDir = env.HIFI_RUNS_DIR;
 
   // 3. Inline overrides.
   if (opts.overrides?.rounds !== undefined) config.rounds = opts.overrides.rounds;

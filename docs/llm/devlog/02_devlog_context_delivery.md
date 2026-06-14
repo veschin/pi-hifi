@@ -27,7 +27,7 @@ bind the critic/judge to a different model the way the worker role is bound.
    paths, renders the plan, and attaches a shape-specific NEXT STEP directive
    on every channel (tool inline included - previously chat-only).
 3. **judge + scout roles**: pairwise judge moved off the worker role;
-   both bindable via `.apodex.json` / `APODEX_JUDGE` / `APODEX_SCOUT`; unset
+   both bindable via `.hifi.json` / `HIFI_JUDGE` / `HIFI_SCOUT`; unset
    models mirror the FINAL worker model (config step 3.5).
 4. **Transparency**: `[team]` roster line (role=provider/model for all six
    roles), `[stage]`-prefixed progress everywhere, `progress.jsonl` artifact.
@@ -60,7 +60,7 @@ tasks; repo files would confound pipeline-vs-baseline; see 50_eval.md).
   ~40-48 KB, grounded answer (score 95-100, holistic approve, 14/14 then
   12/12 atoms verified), all artifacts present, roster + stage prefixes
   asserted. ~80 s, ~$0.02 all-flash.
-- `eval/smoke-pipeline.ts` with `APODEX_JUDGE=deepseek/deepseek-v4-pro`:
+- `eval/smoke-pipeline.ts` with `HIFI_JUDGE=deepseek/deepseek-v4-pro`:
   subcalls.jsonl shows `selector.judge.0v1 judge deepseek-v4-pro` while scout
   and workers stayed flash; the self-contained chunk task produced a clean
   scout skip ("task is fully self-contained", 0 files) and task shape

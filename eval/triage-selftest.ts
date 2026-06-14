@@ -2,10 +2,10 @@
 // fail-safe coercions, the fallback plan, and runTriage's retry/fallback control
 // flow are exercised WITHOUT any LLM (a stub SubCallClient drives the branches).
 // The cheap-flash end-to-end check (runTriage over a real flash model) runs only
-// under APODEX_TRIAGE_LIVE=1 so the default run stays free and CI-safe.
+// under HIFI_TRIAGE_LIVE=1 so the default run stays free and CI-safe.
 //
 // Run (free):  npx tsx eval/triage-selftest.ts
-// Run (+live): APODEX_TRIAGE_LIVE=1 npx tsx eval/triage-selftest.ts
+// Run (+live): HIFI_TRIAGE_LIVE=1 npx tsx eval/triage-selftest.ts
 
 import { parseTriage, fallbackPlan, runTriage, megaRoadmapClarification, shouldBackstopDialog } from "../src/triage.ts";
 import { SubCallClient } from "../src/llm.ts";
@@ -338,12 +338,12 @@ async function runFreeTests(): Promise<boolean> {
     );
   }
 
-  // config.triage - default ON (defaultConfig); APODEX_TRIAGE_ENABLED toggles it
-  // both ways (env beats any .apodex.json, so this is robust to ambient config).
+  // config.triage - default ON (defaultConfig); HIFI_TRIAGE_ENABLED toggles it
+  // both ways (env beats any .hifi.json, so this is robust to ambient config).
   {
     const def = defaultConfig().triage.enabled;
-    const off = loadConfig({ cwd: process.cwd(), env: { APODEX_TRIAGE_ENABLED: "0" } }).config.triage.enabled;
-    const on = loadConfig({ cwd: process.cwd(), env: { APODEX_TRIAGE_ENABLED: "1" } }).config.triage.enabled;
+    const off = loadConfig({ cwd: process.cwd(), env: { HIFI_TRIAGE_ENABLED: "0" } }).config.triage.enabled;
+    const on = loadConfig({ cwd: process.cwd(), env: { HIFI_TRIAGE_ENABLED: "1" } }).config.triage.enabled;
     r.push(
       line("config.triage default on / env toggles", def === true && off === false && on === true, `default=${def} off=${off} on=${on}`),
     );
@@ -379,10 +379,10 @@ async function runLiveTests(): Promise<boolean> {
     cwd: process.cwd(),
     env: {
       ...process.env,
-      APODEX_ANALYST: DEFAULT_WORKER_MODEL,
-      APODEX_MAX_SUBCALLS: process.env.APODEX_MAX_SUBCALLS ?? "6",
-      APODEX_MAX_COST_USD: process.env.APODEX_MAX_COST_USD ?? "0.5",
-      APODEX_MAX_WALL_TIME_MS: process.env.APODEX_MAX_WALL_TIME_MS ?? "120000",
+      HIFI_ANALYST: DEFAULT_WORKER_MODEL,
+      HIFI_MAX_SUBCALLS: process.env.HIFI_MAX_SUBCALLS ?? "6",
+      HIFI_MAX_COST_USD: process.env.HIFI_MAX_COST_USD ?? "0.5",
+      HIFI_MAX_WALL_TIME_MS: process.env.HIFI_MAX_WALL_TIME_MS ?? "120000",
     },
   });
   console.log(`[live] analyst (triage) model = ${config.roles.analyst.model}`);
@@ -440,7 +440,7 @@ async function main(): Promise<void> {
   const free = await runFreeTests();
 
   let live = true;
-  const liveRequested = Boolean(process.env.APODEX_TRIAGE_LIVE);
+  const liveRequested = Boolean(process.env.HIFI_TRIAGE_LIVE);
   if (liveRequested) {
     console.log("\n== LIVE cheap-flash check ==");
     try {
@@ -450,7 +450,7 @@ async function main(): Promise<void> {
       console.error("LIVE check crashed:", err instanceof Error ? err.message : String(err));
     }
   } else {
-    console.log("\nSKIP: live cheap-flash check (set APODEX_TRIAGE_LIVE=1 to run it)");
+    console.log("\nSKIP: live cheap-flash check (set HIFI_TRIAGE_LIVE=1 to run it)");
   }
 
   const ok = free && live;

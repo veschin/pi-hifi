@@ -10,7 +10,7 @@
 //
 // Provider-agnostic: heavy roles default to the session's active model; the
 // cheap worker role defaults to deepseek-v4-flash. Every role is overridable
-// via APODEX_* env vars or .apodex.json (see README).
+// via HIFI_* env vars or .hifi.json (see README).
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";

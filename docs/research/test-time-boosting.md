@@ -4,7 +4,7 @@ Literature survey, compiled 2026-06-11. Focus: 2024-2026 work (2023 classics kep
 
 ## 0. Context, scope, verification status
 
-**Target system.** pi-apodex: a verification-centric pipeline running on DeepSeek models - `deepseek-v4-flash` (cheap/weak: $0.14/$0.28 per 1M tokens in/out) as worker, `deepseek-v4-pro` ($0.435/$0.87, ~3.1× the price) for heavy roles. The pipeline already implements, per task:
+**Target system.** pi-hifi: a verification-centric pipeline running on DeepSeek models - `deepseek-v4-flash` (cheap/weak: $0.14/$0.28 per 1M tokens in/out) as worker, `deepseek-v4-pro` ($0.435/$0.87, ~3.1× the price) for heavy roles. The pipeline already implements, per task:
 
 1. **Selector** - N parallel candidates (generator, t=0.8), node-executed self-tests producing execution evidence, pairwise judge on comprehension/causality/grounding axes (N clamped 1..8).
 2. **GVR loop** - generate->verify->revise, K rounds: a grader in a FRESH single-turn context (sees only task + candidate, never the generator's trace) emits a score plus a written critique against a hifi rubric; the generator revises against the critique; early stop at a score threshold.
@@ -46,7 +46,7 @@ Cost multipliers are stated relative to a single greedy pass of the same model u
 - **What:** allocate test-time compute per-prompt between parallel search against a process reward model (PRM) and sequential revision, choosing the strategy by estimated difficulty.
 - **Evidence** *(abs)*: "improve the efficiency of test-time compute scaling by more than 4x compared to a best-of-N baseline"; FLOPs-matched, "test-time compute can be used to outperform a 14x larger model" - on problems where the small base model has non-trivial success rates. MATH benchmark.
 - **Cost:** reallocation at matched budget (≈4× cheaper than best-of-N for equal accuracy).
-- **Verdict for flash:** the headline mechanism needs a trained PRM and difficulty estimation - not usable against a black-box API. The transferable insight is the *policy*: easy tasks -> revision (GVR), hard tasks -> parallel sampling (selector). pi-apodex already has both stages; what is missing is the difficulty-aware split (see §2.7, agreement as difficulty signal).
+- **Verdict for flash:** the headline mechanism needs a trained PRM and difficulty estimation - not usable against a black-box API. The transferable insight is the *policy*: easy tasks -> revision (GVR), hard tasks -> parallel sampling (selector). pi-hifi already has both stages; what is missing is the difficulty-aware split (see §2.7, agreement as difficulty signal).
 - **Effort:** N/A directly; policy idea is orchestration-level.
 
 ### 1.2 Large Language Monkeys - Brown et al. (2024), arXiv:2407.21787
@@ -69,7 +69,7 @@ Cost multipliers are stated relative to a single greedy pass of the same model u
 - **What:** analytical + empirical limit theorem: a verifier with non-zero false-positive rate imposes a hard accuracy ceiling on resampling, regardless of compute.
 - **Evidence** *(abs)*: "no amount of inference scaling of weaker models can enable them to match the single-sample accuracy of a sufficiently strong model"; "optimal sampling attempts are often fewer than 10, as the negative utility of false positives outweighs benefits". On HumanEval/MBPP, whose unit tests have limited coverage, false positives also carry secondary defects (convention violations). Note: the paper was retitled between versions (v1 "Inference Scaling fLaws..." -> current "The Limits of Inference Scaling Through Resampling").
 - **Cost:** N/A - a design constraint.
-- **Verdict:** the single most important *constraint* for pi-apodex: with flash-authored self-tests as the verifier, raising N beyond ~10 buys false positives, not accuracy. The pipeline's N<=8 clamp is consistent with this. The leverage is verifier precision (better tests, properties, external audit) - which is exactly where the pipeline already invests. Escalating the *generator* to pro on hard tasks is the other escape hatch the theorem allows.
+- **Verdict:** the single most important *constraint* for pi-hifi: with flash-authored self-tests as the verifier, raising N beyond ~10 buys false positives, not accuracy. The pipeline's N<=8 clamp is consistent with this. The leverage is verifier precision (better tests, properties, external audit) - which is exactly where the pipeline already invests. Escalating the *generator* to pro on hard tasks is the other escape hatch the theorem allows.
 - **Effort:** none - informs budgets.
 
 ### 1.5 Sample, Scrutinize and Scale - Zhao, Awasthi, Gollapudi (2025), arXiv:2502.01839
@@ -89,7 +89,7 @@ Cost multipliers are stated relative to a single greedy pass of the same model u
 
 ### 1.7 Adjacent: s1 (arXiv:2501.19393) involves SFT - **out of scope** for a no-training pipeline; its "budget forcing" decoding trick is measured only on the fine-tuned model. Certaindex/Dynasor (arXiv:2412.20993, *(abs)*: "up to 50% compute savings and 3.3× higher throughput" with no accuracy drop) is a serving-layer system - the portable idea (answer-stabilization as an early-exit signal) is already covered by ESC-style stopping (§2.3-2.4). Survey of the field: "A Survey on Test-Time Scaling in Large Language Models" (arXiv:2503.24235).
 
-**Thread 1 net:** weak-model + test-time compute is the literature's best-supported strategy *conditional on verifier quality*; returns saturate fast (N<10) under imperfect verifiers. pi-apodex's architecture matches the consensus; tune N adaptively rather than raising it.
+**Thread 1 net:** weak-model + test-time compute is the literature's best-supported strategy *conditional on verifier quality*; returns saturate fast (N<10) under imperfect verifiers. pi-hifi's architecture matches the consensus; tune N adaptively rather than raising it.
 
 ---
 
@@ -108,7 +108,7 @@ Cost multipliers are stated relative to a single greedy pass of the same model u
 - **What:** concatenate all N candidates and ask the LLM itself to pick the most consistent one - majority voting for free-form outputs where exact-match voting is impossible.
 - **Evidence** *(abs, qualitative)*: matches standard SC on math; matches *execution-based voting on code without executing*. No numbers in abstract.
 - **Cost:** N samples + 1 long-context selection call.
-- **Verdict:** **directly composable** - pi-apodex's design and incident buckets have no execution evidence; USC is the matching selector there (currently the pipeline's pairwise judge plays this role; USC is the cheaper one-call variant, the pairwise tournament the more thorough one).
+- **Verdict:** **directly composable** - pi-hifi's design and incident buckets have no execution evidence; USC is the matching selector there (currently the pipeline's pairwise judge plays this role; USC is the cheaper one-call variant, the pairwise tournament the more thorough one).
 - **Effort:** prompt-only.
 
 ### 2.3 Adaptive-Consistency - Aggarwal et al. (2023), arXiv:2305.11860
@@ -139,7 +139,7 @@ DSC (arXiv:2408.13457) adds a difficulty prior to ESC/ASC (*(abs)* qualitative: 
 
 - **What:** derive calibrated confidence from the distribution of N samples (agreement, entropy, first-second distance).
 - **Evidence** *(abs)*: consistency-based calibration "outperform[s] existing post-hoc approaches" (logit-based, verbalized confidence) across open and closed models on nine reasoning datasets. No logprobs needed for the agreement/FSD variants. Code: github.com/veronica320/Calibrating-LLMs-with-Consistency.
-- **Verdict:** **the highest-leverage free signal in this whole survey for pi-apodex**: the selector already produces N candidates; their (behavioral) agreement rate is a calibrated difficulty/confidence estimate that can gate everything downstream - GVR round count, escalation to pro, external-verification depth.
+- **Verdict:** **the highest-leverage free signal in this whole survey for pi-hifi**: the selector already produces N candidates; their (behavioral) agreement rate is a calibrated difficulty/confidence estimate that can gate everything downstream - GVR round count, escalation to pro, external-verification depth.
 - **Effort:** orchestration only.
 
 ### 2.8 ModelSwitch - Chen et al. (2025), arXiv:2504.00762
@@ -171,7 +171,7 @@ This is the thread with the sharpest apparent contradiction in the literature; t
 - **What:** agent acts, receives a *task feedback signal* (test execution, environment reward), verbally reflects, stores the reflection, retries.
 - **Evidence** *(abs)*: 91% pass@1 on HumanEval (vs GPT-4's 80%). The load-bearing detail *(body)*: for coding, Reflexion generates and **executes** its own unit tests; ablation on the 50 hardest problems - base 0.60, *without* test generation 0.52 (worse than base), self-reflection without tests 0.60 (no gain), full 0.68 (single-extraction figures; flagged). The 91% headline is an **external-feedback** result, not a self-critique result.
 - **Cost:** ~3-10× (k trials × generate + test + execute + reflect).
-- **Verdict:** pi-apodex's GVR with execution evidence *is* the Reflexion pattern done right. The ablation is the strongest argument for never running the revise loop without a grounded signal.
+- **Verdict:** pi-hifi's GVR with execution evidence *is* the Reflexion pattern done right. The ablation is the strongest argument for never running the revise loop without a grounded signal.
 - **Effort:** already implemented in spirit.
 
 ### 3.3 Chain-of-Verification (CoVe) - Dhuliawala et al. (2023), arXiv:2309.11495
@@ -179,7 +179,7 @@ This is the thread with the sharpest apparent contradiction in the literature; t
 - **What:** draft -> plan verification questions -> answer them **independently, without the draft in context** -> revise.
 - **Evidence** *(body, Llama-65B)*: Wikidata list precision 0.17->0.36; MultiSpanQA F1 0.39->0.48; biography FActScore 55.9->71.4. Factored variants (each question answered in a clean context) consistently beat joint ones (60.8 joint vs 63.7 factored vs 71.4 factor+revise) - *quantified* evidence that decoupling verification from the generation context is what buys the gain.
 - **Cost:** ~3-6× (draft + plan + per-question call + rewrite).
-- **Verdict:** pi-apodex's claim-atom audit in fresh contexts is CoVe-factored already. The one importable refinement: ensure atom audits never see the full draft, only the atom + task + evidence.
+- **Verdict:** pi-hifi's claim-atom audit in fresh contexts is CoVe-factored already. The one importable refinement: ensure atom audits never see the full draft, only the atom + task + evidence.
 - **Effort:** prompt audit of the existing verifier.
 
 ### 3.4 CRITIC - Gou et al. (ICLR 2024), arXiv:2305.11738
@@ -214,7 +214,7 @@ This is the thread with the sharpest apparent contradiction in the literature; t
 
 ### 3.8 Fresh-context grading and sycophancy (validates the pipeline's core design)
 
-- **Kim & Khashabi (EMNLP Findings 2025), arXiv:2509.16533** *(abs)*: models "are more likely to endorse a user's counterargument when framed as a follow-up from a user, rather than when both responses are presented simultaneously for evaluation." Same content, different framing: conversational continuation -> sycophantic flip; separate evaluative context -> mostly correct adjudication. This is the direct experimental support for pi-apodex's fresh-context grader.
+- **Kim & Khashabi (EMNLP Findings 2025), arXiv:2509.16533** *(abs)*: models "are more likely to endorse a user's counterargument when framed as a follow-up from a user, rather than when both responses are presented simultaneously for evaluation." Same content, different framing: conversational continuation -> sycophantic flip; separate evaluative context -> mostly correct adjudication. This is the direct experimental support for pi-hifi's fresh-context grader.
 - **SycEval - Fanous et al. (2025), arXiv:2502.08177** *(secondary)*: sycophancy in 58.19% of evaluation cases; regressive (correct->incorrect) flips 14.66%.
 - **Authorship obfuscation - Mahbub & Feng (2025), arXiv:2512.05379** *(abs)*: perturbations that reduce self-recognition "predictably reduce self-preference" - but the bias partially survives stylistic neutralization (it is multi-level familiarity). Fresh context helps; a different-family grader helps more; nothing eliminates it fully.
 
@@ -228,7 +228,7 @@ Self-Refine's "+20%" and Huang's "self-correction degrades" do not actually conf
 
 **Consensus:** external/grounded feedback => revision loops reliably help and are sample-efficient; intrinsic self-critique on objective reasoning => neutral-to-harmful, and *worse* the weaker the model (GV-gap scales with pretraining compute; flash-class judges below random on JudgeBench). Two 2025-26 refinements: (a) verification capacity can be *manufactured* at inference time - contrastive comparison, verification-vote, weak-verifier aggregation - rather than assumed intrinsic; (b) reasoning-class models have internalized some self-correction, so bolted-on critique loops add little there (CorrectBench arXiv:2510.16062; Self-Verification Dilemma arXiv:2602.03485 *(abs)*: the "vast majority" of self-verification steps in long traces are confirmatory, and suppressing them cuts up to 20.3% of tokens at equal accuracy) - while flash-class non-reasoning models still benefit, but only from grounded signals.
 
-**Thread 3 net (verdict for pi-apodex):** the GVR design (fresh-context grader + execution evidence + bounded K + written critique) is the configuration the literature converges on. The weak points the evidence flags: (i) a flash-or-even-pro *holistic* correctness verdict is the least reliable element - constrain the grader to rubric/checklist verification (already done) and contrastive comparison; (ii) critique must carry **error locations and evidence** (failing test output, contradicted atom), not prose advice; (iii) same-family grader bias is real - see §5.
+**Thread 3 net (verdict for pi-hifi):** the GVR design (fresh-context grader + execution evidence + bounded K + written critique) is the configuration the literature converges on. The weak points the evidence flags: (i) a flash-or-even-pro *holistic* correctness verdict is the least reliable element - constrain the grader to rubric/checklist verification (already done) and contrastive comparison; (ii) critique must carry **error locations and evidence** (failing test output, contradicted atom), not prose advice; (iii) same-family grader bias is real - see §5.
 
 ---
 
@@ -239,7 +239,7 @@ Self-Refine's "+20%" and Huang's "self-correction degrades" do not actually conf
 - **What:** the model generates both code candidates and test cases; dual execution agreement (consensus sets ranked by |solutions|×|tests passed|) selects the winner.
 - **Evidence** *(abs)*: HumanEval pass@1 65.8% with code-davinci-002 - "+18.8% absolute over the code-davinci-002 model and more than 20% absolute over the previous SOTA"; gains consistent across five models of varying size. Code: github.com/microsoft/CodeT.
 - **Cost:** ~(N + tests)× generation + N×T sandbox executions.
-- **Verdict:** pi-apodex's selector is CodeT-family already (self-tests + exec evidence). Headroom is in the selection *math* (->B4) and test *quality* (->§4.6).
+- **Verdict:** pi-hifi's selector is CodeT-family already (self-tests + exec evidence). Headroom is in the selection *math* (->B4) and test *quality* (->§4.6).
 
 ### 4.2 AlphaCode - Li et al. (2022), arXiv:2203.07814 / Science
 
@@ -278,7 +278,7 @@ Self-Refine's "+20%" and Huang's "self-correction degrades" do not actually conf
 - Mirror failure for graders: LLM reviewers also *over-reject* correct code (arXiv:2603.00539, title-level, UNVERIFIED).
 - **Budget Reallocation - Hassid et al. (2024), arXiv:2404.00725** *(abs)* - the boundary condition for everything above: at matched compute, "repeated use of smaller models can yield consistent improvements, with gains of up to 15% across five tasks" **when unit tests select** - but with ranking-based (LLM) selection, small-model sampling "falls short of the performance of a single output from larger ones." The entire weak-generator advantage is conditional on execution-grounded selection.
 
-**Thread 4 net:** pi-apodex's selector architecture is right; the upgrades are math (B4), structure (cluster -> distinguish -> judge), test quality (properties, behavior-only inputs), and an incoherence-based escalation gate.
+**Thread 4 net:** pi-hifi's selector architecture is right; the upgrades are math (B4), structure (cluster -> distinguish -> judge), test quality (properties, behavior-only inputs), and an incoherence-based escalation gate.
 
 ---
 
@@ -295,7 +295,7 @@ Self-Refine's "+20%" and Huang's "self-correction degrades" do not actually conf
 - Selective debate: iMAD (arXiv:2511.11306, *(abs)*) triggers debate only when a classifier predicts a flip - up to 92% token reduction and up to +13.5% accuracy vs always-debate (needs a light trained classifier).
 - Huang et al. *(body)*, independently: SC with 6 samples (85.3%) beats 6-agent debate (83.2%) - debate as a costlier consistency estimator.
 
-**Verdict: do not add debate to pi-apodex.** The pipeline already has diversity (parallel candidates) and error-checking (GVR + external audit) in stronger, grounded forms. If anything debate-shaped is ever tried, it must be selective (uncertainty-triggered) and heterogeneous (different model family) - the only configurations with positive evidence.
+**Verdict: do not add debate to pi-hifi.** The pipeline already has diversity (parallel candidates) and error-checking (GVR + external audit) in stronger, grounded forms. If anything debate-shaped is ever tried, it must be selective (uncertainty-triggered) and heterogeneous (different model family) - the only configurations with positive evidence.
 
 ### 5.2 Judge ensembles - PoLL, Verga et al. (2024), arXiv:2404.18796
 
@@ -310,7 +310,7 @@ Self-Refine's "+20%" and Huang's "self-correction degrades" do not actually conf
 - **CAPA - Goel et al. (2025), arXiv:2502.04313** *(abs)*: "LLM-as-a-judge scores favor models similar to the judge" *after controlling for accuracy* (partial r = 0.35-0.65 across 351 judge-model pairs, *(body)*); weak-to-strong training gains shrink as teacher-student similarity rises; and across 130 models, "model mistakes are becoming more similar with increasing capabilities, pointing to risks from correlated failures."
 - Combined with the perplexity-familiarity mechanism (§3.6, Wataoka) the implication is direct: **pro grading flash is not an independent grader** - they share lineage, data, and tokenizer; expect inflated pass rates precisely on family-typical confident errors.
 - **Multi-Agent Verification / BoN-MAV (2025), arXiv:2502.20379** *(abs, qualitative)*: best-of-N scored by multiple prompt-only "aspect verifiers" shows stronger scaling than self-consistency or reward models, with weak-to-strong generalization (combining weak verifiers improves stronger generators). Numbers not in abstract (UNVERIFIED).
-- **Verdict:** the cheapest meaningful decorrelation for pi-apodex: add one or two cheap non-DeepSeek voters (per PoLL) at the grader's accept/reject decision and/or the pairwise judging stage, and keep the retrieval-grounded external verifier (which shares no model prior) as the final arbiter. The fully-grounded signals already in the pipeline (execution evidence) are immune to this failure class - another reason to maximize their share of the decision.
+- **Verdict:** the cheapest meaningful decorrelation for pi-hifi: add one or two cheap non-DeepSeek voters (per PoLL) at the grader's accept/reject decision and/or the pairwise judging stage, and keep the retrieval-grounded external verifier (which shares no model prior) as the final arbiter. The fully-grounded signals already in the pipeline (execution evidence) are immune to this failure class - another reason to maximize their share of the decision.
 
 **Thread 5 net:** skip debate; keep the diversity and the checking, drop the conversation. Adopt the jury pattern for grading decisions and decorrelate the grader family - same-family graders are measurably not independent.
 
@@ -349,7 +349,7 @@ Self-Refine's "+20%" and Huang's "self-correction degrades" do not actually conf
 - **Consistency-based calibration (§2.7)** beats both logit-based and verbalized post-hoc methods.
 - Surveys: arXiv:2503.15850; ACL 2025 Findings survey; arXiv:2412.05563. Consistent ranking: sampling-consistency > logit-based > verbalized.
 
-**Thread 7 net:** the flash->pro consistency-deferral cascade is the best-supported cost mechanism available to pi-apodex, and the signal (candidate agreement) is already being produced. For free-form buckets, discrete semantic entropy (NLI-clustering by a cheap call) is the matching signal. Verified expectation: pro-parity output at ~40-60% of an all-pro pipeline.
+**Thread 7 net:** the flash->pro consistency-deferral cascade is the best-supported cost mechanism available to pi-hifi, and the signal (candidate agreement) is already being produced. For free-form buckets, discrete semantic entropy (NLI-clustering by a cheap call) is the matching signal. Verified expectation: pro-parity output at ~40-60% of an all-pro pipeline.
 
 ---
 
@@ -375,7 +375,7 @@ Self-Refine's "+20%" and Huang's "self-correction degrades" do not actually conf
 - **CoT brittleness** (arXiv:2508.01191 *(abs)*): "CoT reasoning is a brittle mirage when it is pushed beyond training distributions."
 - **Structured output:** "Let Me Speak Freely?" (arXiv:2408.02442 *(abs)*: "significant decline in LLMs reasoning abilities under format restrictions") vs the dottxt rebuttal (matched prompts, constrained decoding actually won on all three re-run tasks). Practical consensus: **reason in free text first, format/extract after**; constrained decoding per se is safe.
 
-**Thread 8 net:** flash is a weak non-reasoning-mode-by-default model - exactly the population where the anchors still pay, *within scope* (math/symbolic/code). Concretely: plan-then-implement for code-mode generation (~2 calls, +11.9-25.4% relative in its measured regime); PoT-style "compute, don't recite" for any numeric claim (composes with the existing sandbox); skip elaborate scaffolds in design/incident prose; if flash runs with `thinking: high`, drop few-shot exemplars (R1 finding, family-plausible - UNVERIFIED for v4-flash specifically). Agentless validates the meta-design: fixed decomposed pipelines beat free-form agency per dollar - pi-apodex is already on this side.
+**Thread 8 net:** flash is a weak non-reasoning-mode-by-default model - exactly the population where the anchors still pay, *within scope* (math/symbolic/code). Concretely: plan-then-implement for code-mode generation (~2 calls, +11.9-25.4% relative in its measured regime); PoT-style "compute, don't recite" for any numeric claim (composes with the existing sandbox); skip elaborate scaffolds in design/incident prose; if flash runs with `thinking: high`, drop few-shot exemplars (R1 finding, family-plausible - UNVERIFIED for v4-flash specifically). Agentless validates the meta-design: fixed decomposed pipelines beat free-form agency per dollar - pi-hifi is already on this side.
 
 ---
 
@@ -392,7 +392,7 @@ Self-Refine's "+20%" and Huang's "self-correction degrades" do not actually conf
 
 - **DocPrompting - Zhou et al. (ICLR 2023), arXiv:2207.05987** *(abs)*: retrieving docs improves weak models most - CodeT5 +2.85pp pass@1 (52% relative) on CoNaLa; up to +6.9pp exact-match on tldr (CodeT5/GPT-Neo ~0.2-2.7B). Strongest evidence that docs retrieval helps precisely the weak-model class.
 - **When LLMs Meet API Documentation (2025), arXiv:2503.15231** *(abs)*: "RAG helps improve LLMs' performance by 83%-220%" on less-common libraries; "example code contributes the most", not descriptions/parameter lists. Retrieve usage examples, not just signatures.
-- **De-Hallucinator - Eghbali & Pradel (2024), arXiv:2401.01701** *(abs)*: draft -> mine its (possibly fake) API references -> retrieve real similar signatures from the project index -> re-prompt: completion edit-distance +23.3-50.6%, API-usage recall +23.9-61.0%. The pattern composes with pi-apodex's GVR loop (a "symbol audit" between rounds).
+- **De-Hallucinator - Eghbali & Pradel (2024), arXiv:2401.01701** *(abs)*: draft -> mine its (possibly fake) API references -> retrieve real similar signatures from the project index -> re-prompt: completion edit-distance +23.3-50.6%, API-usage recall +23.9-61.0%. The pattern composes with pi-hifi's GVR loop (a "symbol audit" between rounds).
 - **CodeRAG-Bench (arXiv:2406.14497)** *(abs)*: retrieval gains are real but bottlenecked by retriever quality and by weak generators' limited ability to integrate context - keep injected contexts short and example-centric.
 - **FreshLLMs/FreshPrompt (arXiv:2310.03214)** *(body)*: injecting ~15 search-engine evidences lifts GPT-4 by +47pp absolute (STRICT) on fast-changing facts. Cheap: 1 search call + a bigger prompt.
 - Context7-style MCP docs servers: industry practice, the productionized DocPrompting; no benchmark paper.
@@ -401,9 +401,9 @@ Self-Refine's "+20%" and Huang's "self-correction degrades" do not actually conf
 
 - **FActScore - Min et al. (EMNLP 2023), arXiv:2305.14251** *(abs)*: atomic-claim decomposition + retrieval verification; ChatGPT bios score only 58%; the automated estimator tracks human FActScore within <2%.
 - **SAFE - Wei et al. (NeurIPS 2024), arXiv:2403.18802** *(abs, all three numbers verified)*: LLM agent + Google Search per atomic claim: "agrees with crowdsourced human annotators 72% of the time, and on a random subset of 100 disagreement cases, SAFE wins 76% of the time", ">20 times cheaper than human annotators." Code: github.com/google-deepmind/long-form-factuality.
-- **VERIFY/FactBench (ACL 2025, arXiv:2410.22257)** *(secondary)*: adds the third label - supported / unsupported / **undecidable** - and weights claim verifiability. Importable refinement: pi-apodex's verifier should distinguish "contradicted" from "unverifiable" (the assembler already flags "Unverified:" - keep that tri-state).
+- **VERIFY/FactBench (ACL 2025, arXiv:2410.22257)** *(secondary)*: adds the third label - supported / unsupported / **undecidable** - and weights claim verifiability. Importable refinement: pi-hifi's verifier should distinguish "contradicted" from "unverifiable" (the assembler already flags "Unverified:" - keep that tri-state).
 - **ClaimCheck (2025), arXiv:2510.01226** *(secondary)*: a 4B model in a structured pipeline hits 76.4% on AVeriTeC, beating prior GPT-4o pipelines - claim verification does not need a frontier judge if the pipeline is structured. Direct validation of running the atom auditor on flash/worker.
-- **"Argus-style evidence assembly"** resolves to **Argus - Zhang et al. (2026), arXiv:2605.16217** *(abs)*: deep-research agent assembling complementary evidence into a navigator-maintained evidence graph (Searcher+Navigator); +5.5 points single-searcher, +12.7 averaged over 8 benchmarks with 8 parallel searchers; 86.2 on BrowseComp with 64. It is a research-agent architecture, not a post-hoc claim checker; relevant only if pi-apodex's verifier grows its own web-search loop. No other 2024-26 "Argus" claim-verification paper exists (searched; not found).
+- **"Argus-style evidence assembly"** resolves to **Argus - Zhang et al. (2026), arXiv:2605.16217** *(abs)*: deep-research agent assembling complementary evidence into a navigator-maintained evidence graph (Searcher+Navigator); +5.5 points single-searcher, +12.7 averaged over 8 benchmarks with 8 parallel searchers; 86.2 on BrowseComp with 64. It is a research-agent architecture, not a post-hoc claim checker; relevant only if pi-hifi's verifier grows its own web-search loop. No other 2024-26 "Argus" claim-verification paper exists (searched; not found).
 - Adaptive retrieval without training: FLARE (arXiv:2305.06983, logprob-triggered), AdaRAGUE (ACL 2025, arXiv:2501.12835 *(secondary)*: plain uncertainty estimators match complex adaptive-RAG), TARG (arXiv:2511.09803 *(secondary)*: gate from a short no-context draft's entropy). Self-RAG (arXiv:2310.11511) and CRAG (arXiv:2401.15884) need training - pattern-only relevance.
 
 **Thread 9 net:** post-hoc claim audit (present) and pre-generation grounding (absent) are complementary, not redundant: the audit catches false claims; docs-RAG and registry gates *prevent* the API-hallucination class, which is cheaper than catch-and-revise. The planned v2 "web-verifying verifier" (Brave key already available) is exactly SAFE's shape; import its decontextualization step and VERIFY's tri-state label.
@@ -423,7 +423,7 @@ Self-Refine's "+20%" and Huang's "self-correction degrades" do not actually conf
 
 ---
 
-## 11. Concretely adoptable in pi-apodex v2, ranked by expected value per dollar
+## 11. Concretely adoptable in pi-hifi v2, ranked by expected value per dollar
 
 Pricing anchor: flash $0.14/$0.28, pro $0.435/$0.87 per 1M tokens (3.1×). "Free" = no new LLM calls.
 

@@ -28,7 +28,7 @@ See also: [20_pipeline.md](20_pipeline.md) · [90_lessons.md](90_lessons.md).
   `docs/eval-results/20260611-164416`. The context/delivery stages are
   covered by `eval/smoke-context.ts` instead.
 - **Protocol pin 2 (2026-06-12, brief/judge)**: `brief.enabled=false` and
-  `APODEX_JUDGE=deepseek-v4-flash` in eval/run-eval.ts. The judge default
+  `HIFI_JUDGE=deepseek-v4-flash` in eval/run-eval.ts. The judge default
   moved to session-heavy+thinking and the brief stage was added; the
   published numbers predate both. Measuring either is a deliberate future
   protocol change, not a default.
@@ -37,7 +37,7 @@ See also: [20_pipeline.md](20_pipeline.md) · [90_lessons.md](90_lessons.md).
 
 | bucket | check | notes |
 |---|---|---|
-| code (3) | hidden node test suites (16/10/9 checks), partial credit | tests report `APODEX_TESTS k/TOTAL` **after every check** and trap uncaughtException/unhandledRejection - a mid-suite crash keeps partial credit; scorer takes the LAST match |
+| code (3) | hidden node test suites (16/10/9 checks), partial credit | tests report `HIFI_TESTS k/TOTAL` **after every check** and trap uncaughtException/unhandledRejection - a mid-suite crash keeps partial credit; scorer takes the LAST match |
 | design (3) | locked 8-item rubrics, strict yes/no per item at t=0 | check-errors are surfaced as `?` in the detail, never silently counted as failed requirements |
 | incident (3) | known root cause; 1.0 primary / 0.4 mentioned / 0 absent | confidently-wrong (high-confidence wrong primary) tracked separately |
 

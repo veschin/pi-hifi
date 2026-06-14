@@ -10,16 +10,16 @@ See also: [30_subcall_infra.md](30_subcall_infra.md) · [10_scope.md](10_scope.m
 
 ## Registered surface (index.ts)
 
-- **Tool `apodex`** (LLM-callable): params `task`, `mode?`
+- **Tool `hifi`** (LLM-callable): params `task`, `mode?`
   (auto|design|code|incident|general), `rounds?` (1-10), `candidates?` (1-8).
   Both extension paths run with `briefInteractive: true`.
 - **Clarification contract (2026-06-12)**: when `result.clarification` is set
   the run PAUSED in the brief stage. `composeClarification` returns the
   questions (or the draft brief) plus a NEXT STEP telling the calling model to
   relay them to the user VERBATIM (never answer/approve itself) and re-invoke
-  apodex with the ORIGINAL task plus a `# Clarification answers` /
+  hifi with the ORIGINAL task plus a `# Clarification answers` /
   `# Approved brief` section. Command path sends it as customType
-  `apodex-clarification` with `triggerTurn: true`. The paused run is closed;
+  `hifi-clarification` with `triggerTurn: true`. The paused run is closed;
   all dialog state lives in chat text.
   The task need NOT paste workspace files - the scout stage lists and reads
   them itself (read-only); it must still carry goal/constraints and any
@@ -72,9 +72,9 @@ See also: [30_subcall_infra.md](30_subcall_infra.md) · [10_scope.md](10_scope.m
 
 ## Install / distribution
 
-- One-liner: `pi install git:github.com/veschin/pi-apodex` (pi clones over
+- One-liner: `pi install git:github.com/veschin/pi-hifi` (pi clones over
   HTTPS). HTTPS-filtered networks (this machine without VPN):
-  `git clone git@github.com:veschin/pi-apodex ~/.pi/agent/extensions/pi-apodex`.
+  `git clone git@github.com:veschin/pi-hifi ~/.pi/agent/extensions/pi-hifi`.
   Local dev install = that same symlink (currently in place).
 - Hot reload after edits: `/reload` in the session. Do NOT `/reload` while a
   command-launched run is in flight - the stale instance may fail to deliver

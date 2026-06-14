@@ -1,4 +1,4 @@
-# pi-apodex: A Verification-Centric Inference-Time Reasoning Layer for the Pi Coding Agent
+# pi-hifi: A Verification-Centric Inference-Time Reasoning Layer for the Pi Coding Agent
 
 > An open-source replication of the inference-time portion of the **Apodex-1.0**
 > verification-centric agent-team method, packaged as an extension for the
@@ -87,7 +87,7 @@ converges on two observations: *verification is easier than generation*, and
 verification only pays when it is **external** (a fresh context, a different
 role, ideally grounded in execution) rather than introspective self-review.
 
-`pi-apodex` operationalizes these observations inside a daily-driver coding
+`pi-hifi` operationalizes these observations inside a daily-driver coding
 agent. It is deliberately **not** a 150-agent datacenter swarm: it is a small,
 budget-capped team (3-10 concurrent sub-calls) implemented as deterministic
 control flow in TypeScript, where every probabilistic step is anchored by an
@@ -387,15 +387,15 @@ otherwise.
 ### 7.1 One-Line Installation
 
 ```bash
-pi install git:github.com/veschin/pi-apodex
+pi install git:github.com/veschin/pi-hifi
 ```
 
 Pi clones the repository, registers the extension, and loads it in every
-subsequent session (`pi remove git:github.com/veschin/pi-apodex` to
+subsequent session (`pi remove git:github.com/veschin/pi-hifi` to
 uninstall). To try it once without touching your settings:
 
 ```bash
-pi -e git:github.com/veschin/pi-apodex
+pi -e git:github.com/veschin/pi-hifi
 ```
 
 No `npm install` is required for in-session use: inside Pi, the SDK imports
@@ -407,14 +407,14 @@ filtered, install via SSH instead - a plain clone into Pi's global extension
 directory is equivalent:
 
 ```bash
-git clone git@github.com:veschin/pi-apodex ~/.pi/agent/extensions/pi-apodex
+git clone git@github.com:veschin/pi-hifi ~/.pi/agent/extensions/pi-hifi
 ```
 
 ### 7.2 Invocation
 
-- **Model-initiated** - the session model sees an `apodex` tool ("delegate a
+- **Model-initiated** - the session model sees a `hifi` tool ("delegate a
   hard engineering task to a verification pipeline; costs multiple sub-calls")
-  and calls it at its own judgment; saying "solve this via apodex" forces the
+  and calls it at its own judgment; saying "solve this via hifi" forces the
   delegation.
 - **User-initiated** - `/apodex <task text>` runs the pipeline directly;
   `/apodex-config` prints the effective configuration.
@@ -429,11 +429,11 @@ git clone git@github.com:veschin/pi-apodex ~/.pi/agent/extensions/pi-apodex
 
 ### 7.3 Configuration
 
-Precedence: defaults ← `.apodex.json` (project) ← `APODEX_*` env ← tool
+Precedence: defaults ← `.hifi.json` (project) ← `HIFI_*` env ← tool
 parameters.
 
 ```jsonc
-// .apodex.json
+// .hifi.json
 {
   "roles": {
     "generator": "session",                 // or "provider/model-id"
@@ -447,20 +447,20 @@ parameters.
   "budget": { "maxSubCalls": 60, "maxTotalTokens": 3000000, "maxCostUsd": 5,
               "maxWallTimeMs": 1800000, "subCallTimeoutMs": 360000, "subCallMaxRetries": 2 },
   "exec": { "enabled": true, "timeoutMs": 10000 },
-  "runsDir": ".apodex/runs"
+  "runsDir": ".hifi/runs"
 }
 ```
 
-Env equivalents: `APODEX_GENERATOR`, `APODEX_GRADER`, `APODEX_VERIFIER`,
-`APODEX_WORKER`, `APODEX_ROUNDS`, `APODEX_CANDIDATES`,
-`APODEX_SCORE_THRESHOLD`, `APODEX_MAX_SUBCALLS`, `APODEX_MAX_TOTAL_TOKENS`,
-`APODEX_MAX_COST_USD`, `APODEX_MAX_WALL_TIME_MS`, `APODEX_SUBCALL_TIMEOUT_MS`,
-`APODEX_SUBCALL_MAX_RETRIES`, `APODEX_EXEC_ENABLED`, `APODEX_RUNS_DIR`.
+Env equivalents: `HIFI_GENERATOR`, `HIFI_GRADER`, `HIFI_VERIFIER`,
+`HIFI_WORKER`, `HIFI_ROUNDS`, `HIFI_CANDIDATES`,
+`HIFI_SCORE_THRESHOLD`, `HIFI_MAX_SUBCALLS`, `HIFI_MAX_TOTAL_TOKENS`,
+`HIFI_MAX_COST_USD`, `HIFI_MAX_WALL_TIME_MS`, `HIFI_SUBCALL_TIMEOUT_MS`,
+`HIFI_SUBCALL_MAX_RETRIES`, `HIFI_EXEC_ENABLED`, `HIFI_RUNS_DIR`.
 
 ### 7.4 Reproducing the Evaluation
 
 ```bash
-git clone https://github.com/veschin/pi-apodex && cd pi-apodex
+git clone https://github.com/veschin/pi-hifi && cd pi-hifi
 npm install                          # dev install (tsx, SDK types)
 npx tsx eval/selfcheck.ts            # validate the hidden tests themselves
 npx tsx eval/run-eval.ts --engine both --concurrency 3
@@ -485,7 +485,7 @@ src/
   exec.ts           local node execution of self-tests (temp dir, timeouts)
   roles.ts          role -> model+credential resolution (provider-agnostic)
   budget.ts         central spend/time guard
-  config.ts         defaults, .apodex.json / env overrides, clamping
+  config.ts         defaults, .hifi.json / env overrides, clamping
   json.ts           tolerant JSON / field extraction from model output
   store.ts          per-run artifact store
 eval/

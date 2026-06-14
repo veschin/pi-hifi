@@ -111,7 +111,7 @@ async function rosterLine(resolver: RoleResolver, roles: readonly RoleName[]): P
 export async function runHifi(opts: PipelineOptions): Promise<HifiResult> {
   const task = opts.task.trim();
   if (task === "") {
-    throw new Error("apodex: task must be a non-empty string");
+    throw new Error("pi-hifi: task must be a non-empty string");
   }
 
   const warnings: string[] = [...opts.configWarnings];

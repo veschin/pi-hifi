@@ -1,7 +1,7 @@
 // Eval harness: every task runs two ways on the SAME engine -
 //   baseline: one single-pass call (identical prompt/convention/params to the
 //             pipeline's own generator role);
-//   pipeline: the full apodex pipeline;
+//   pipeline: the full pi-hifi pipeline;
 // then both answers are scored by the same programmatic check. Prints a summary
 // table and persists JSON results.
 //
@@ -100,14 +100,14 @@ function engineEnv(engine: Engine): NodeJS.ProcessEnv {
   const heavy = engine === "pro" ? "deepseek/deepseek-v4-pro" : "deepseek/deepseek-v4-flash";
   return {
     ...process.env,
-    APODEX_GENERATOR: heavy,
-    APODEX_GRADER: heavy,
-    APODEX_VERIFIER: heavy,
-    APODEX_WORKER: "deepseek/deepseek-v4-flash",
+    HIFI_GENERATOR: heavy,
+    HIFI_GRADER: heavy,
+    HIFI_VERIFIER: heavy,
+    HIFI_WORKER: "deepseek/deepseek-v4-flash",
     // Protocol pin (2026-06-12): the judge default moved to the session-heavy
     // model; the published 20260611 numbers ran with judge mirroring the flash
     // worker. Pinned to flash so post-change runs stay comparable.
-    APODEX_JUDGE: "deepseek/deepseek-v4-flash",
+    HIFI_JUDGE: "deepseek/deepseek-v4-flash",
   };
 }
 
@@ -345,7 +345,7 @@ function printReport(results: TaskResult[]): string {
   const engine = results[0]?.engine ?? "?";
   lines.push("");
   lines.push(
-    `=== apodex eval [engine: ${engine} heavy roles] - single-pass baseline (mean of ${BASELINE_SAMPLES}) vs verification pipeline ===`,
+    `=== pi-hifi eval [engine: ${engine} heavy roles] - single-pass baseline (mean of ${BASELINE_SAMPLES}) vs verification pipeline ===`,
   );
   lines.push("");
   lines.push(

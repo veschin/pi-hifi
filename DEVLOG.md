@@ -22,11 +22,11 @@
   atoms extracted, each audited; holistic audit) -> assembly from verified atom pool.
 - **Roles**: generator / grader / verifier / worker. Default: heavy roles = session-active
   model, worker = deepseek-v4-flash; standalone fallback = deepseek-v4-pro. Every role
-  overridable (`provider/model-id` or `session`) via env `APODEX_<ROLE>` or `.apodex.json`.
+  overridable (`provider/model-id` or `session`) via env `HIFI_<ROLE>` or `.hifi.json`.
 - **Budgets enforced centrally** in the sub-call client: max sub-calls, max total tokens,
   max USD cost, max wall time; K clamped 1..10, N clamped 1..8. On budget exhaustion the
   pipeline returns best-so-far flagged `budgetExhausted`.
-- **Persistence**: every run writes `.apodex/runs/<runId>/` - config snapshot, every
+- **Persistence**: every run writes `.hifi/runs/<runId>/` - config snapshot, every
   sub-call record (role, model, prompts, response, usage, timing), grades, pairwise
   verdicts, evidence atoms, final answer. Auditable end to end.
 - **Execution evidence** (code mode): candidate's self-test executed via `node` in a
@@ -45,7 +45,7 @@
   code task): selector ran both self-tests and picked a winner; GVR round 1 scored
   87/100, revision per critique reached 100/100 with early stop; verifier audited
   14/14 atoms verified, holistic approve; 22 sub-calls, 59k tokens, $0.028, 336 s.
-  Artifacts complete in `.apodex/runs/run-20260611-152826-s9azd1/`. The
+  Artifacts complete in `.hifi/runs/run-20260611-152826-s9azd1/`. The
   critique-steered revision visibly improved the answer - the GVR loop works as
   designed, not as best-of-K.
 - In-pi integration observed: a deepseek-flash host session called the `apodex`
@@ -72,7 +72,7 @@ was traced to a concrete cause via run artifacts:
 
 1. code-retry -1.00: the pipeline's final solution races an attempt against an
    abort and leaves the loser's rejection unhandled -> node crash mid-suite ->
-   "APODEX_TESTS" never printed -> 0 despite 7/10 checks objectively passing
+   "HIFI_TESTS" never printed -> 0 despite 7/10 checks objectively passing
    before the crash. Two distinct findings: (a) a REAL pipeline miss - static
    grading/verification cannot catch a floating-promise bug (the grader gave
    100; the verifier flagged 2 other genuine defects but not this one);

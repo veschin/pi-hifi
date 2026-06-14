@@ -41,12 +41,12 @@ function sharedConfig(rounds: number, candidates: number): { config: HifiConfig;
     cwd: process.cwd(),
     env: {
       ...process.env,
-      APODEX_GENERATOR: process.env.APODEX_GENERATOR ?? heavy,
-      APODEX_GRADER: process.env.APODEX_GRADER ?? heavy,
-      APODEX_VERIFIER: process.env.APODEX_VERIFIER ?? heavy,
-      APODEX_ANALYST: process.env.APODEX_ANALYST ?? heavy,
-      APODEX_JUDGE: process.env.APODEX_JUDGE ?? heavy,
-      APODEX_WORKER: process.env.APODEX_WORKER ?? "deepseek/deepseek-v4-flash",
+      HIFI_GENERATOR: process.env.HIFI_GENERATOR ?? heavy,
+      HIFI_GRADER: process.env.HIFI_GRADER ?? heavy,
+      HIFI_VERIFIER: process.env.HIFI_VERIFIER ?? heavy,
+      HIFI_ANALYST: process.env.HIFI_ANALYST ?? heavy,
+      HIFI_JUDGE: process.env.HIFI_JUDGE ?? heavy,
+      HIFI_WORKER: process.env.HIFI_WORKER ?? "deepseek/deepseek-v4-flash",
     },
     overrides: { rounds, candidates },
   });

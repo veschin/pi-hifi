@@ -74,5 +74,5 @@ concluded "ноль реакции" while two runs were in fact executing.
 Rule: **every long-running command posts an immediate chat-visible launch
 echo, mirrors progress to a widget, and posts failures to chat** - a footer
 status is invisible to a user who does not know to look for it. Verify UX
-paths by their artifacts (`.apodex/runs/`) since print mode does not echo
+paths by their artifacts (`.hifi/runs/`) since print mode does not echo
 custom messages.

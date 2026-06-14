@@ -208,7 +208,7 @@ let cachedTier: SandboxTier | null = null;
 /**
  * Test hook: force the detected tier (and bypass the probe). GUARDED - this is a
  * process-global override of the security boundary's view of the host, so it
- * throws unless APODEX_TEST_HOOKS=1 is set, keeping it unreachable in a normal
+ * throws unless HIFI_TEST_HOOKS=1 (or the deprecated APODEX_TEST_HOOKS=1) is set, keeping it unreachable in a normal
  * embed (a stray/malicious call cannot silently make a tier-less host look safe).
  * Threat note: even if the env leaks into an embed (env is inherited by child
  * processes), this cannot WEAKEN the boundary - forcing a fake `rootless` makes
@@ -216,8 +216,8 @@ let cachedTier: SandboxTier | null = null;
  * refuses more; the env merely makes the hook callable, never unsandboxes work.
  */
 export function __setSandboxTier(t: SandboxTier | null): void {
-  if (process.env.APODEX_TEST_HOOKS !== "1") {
-    throw new Error("__setSandboxTier is a test-only hook; set APODEX_TEST_HOOKS=1 to enable it");
+  if (process.env.HIFI_TEST_HOOKS !== "1" && process.env.APODEX_TEST_HOOKS !== "1") {
+    throw new Error("__setSandboxTier is a test-only hook; set HIFI_TEST_HOOKS=1 to enable it");
   }
   cachedTier = t;
 }
@@ -231,7 +231,7 @@ export async function detectSandbox(force = false): Promise<SandboxTier> {
 
   const hasBwrap = (await spawnCapped("bwrap", ["--version"], 5_000, 1_024)).exitCode === 0;
   if (hasBwrap) {
-    const wd = fs.mkdtempSync(path.join(os.tmpdir(), "apodex-detect-"));
+    const wd = fs.mkdtempSync(path.join(os.tmpdir(), "hifi-detect-"));
     try {
       const probe = await spawnCapped(
         "systemd-run",
@@ -342,7 +342,7 @@ export async function runCell(spec: CellSpec): Promise<CellEvidence> {
 
   let dir: string;
   try {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), "apodex-cell-"));
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "hifi-cell-"));
   } catch (err) {
     return { ...base, tier, skippedReason: `workdir creation failed: ${err instanceof Error ? err.message : String(err)}` };
   }
@@ -365,7 +365,7 @@ export async function runCell(spec: CellSpec): Promise<CellEvidence> {
         "/bin/sh",
         "-c",
         COPY_THEN_EXEC,
-        "apodex-cell",
+        "hifi-cell",
         ...spec.argv,
       ];
     } else {

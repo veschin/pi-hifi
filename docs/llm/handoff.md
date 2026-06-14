@@ -79,7 +79,7 @@ not building.
 Run the composer on a real task and WATCH it, end to end:
 
 ```bash
-cd ~/ai/pi-apodex
+cd ~/ai/pi-hifi
 npx tsx eval/smoke-composer.ts        # code mode, already-proven baseline
 ```
 
@@ -230,7 +230,7 @@ run you observed, never "looks right".
    exec DISABLED, answer ships flagged "not executed". Never default-open.
 8. Eval comparability is pinned by single lines (triage/brief/context/delivery/
    polyglot/composer all OFF in run-eval.ts pinnedConfig). Do not disturb.
-9. `__setSandboxTier` is test-only (throws without APODEX_TEST_HOOKS=1).
+9. `__setSandboxTier` is test-only (throws without HIFI_TEST_HOOKS=1).
 10. Do not cram a broken half-state into an exhausted context. But also do not
     use "don't cram" as an excuse to defer the finish (see consequences).
 
@@ -253,7 +253,7 @@ whole job.
 ## ORIENT / VERIFY COMMANDS
 
 ```bash
-cd ~/ai/pi-apodex
+cd ~/ai/pi-hifi
 npx tsc --noEmit
 npx tsx eval/smoke-composer.ts            # composer end-to-end, code (PAID, ~$0.02)
 # T2: extend this smoke to design+incident+general, then run.

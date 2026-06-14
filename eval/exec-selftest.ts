@@ -42,8 +42,8 @@ async function main(): Promise<void> {
   // --- config.exec.allowUnsandboxed: default OFF (fail-closed), env toggles. ---
   {
     const def = defaultConfig().exec.allowUnsandboxed;
-    const off = loadConfig({ cwd: process.cwd(), env: { APODEX_EXEC_ALLOW_UNSANDBOXED: "0" } }).config.exec.allowUnsandboxed;
-    const on = loadConfig({ cwd: process.cwd(), env: { APODEX_EXEC_ALLOW_UNSANDBOXED: "1" } }).config.exec.allowUnsandboxed;
+    const off = loadConfig({ cwd: process.cwd(), env: { HIFI_EXEC_ALLOW_UNSANDBOXED: "0" } }).config.exec.allowUnsandboxed;
+    const on = loadConfig({ cwd: process.cwd(), env: { HIFI_EXEC_ALLOW_UNSANDBOXED: "1" } }).config.exec.allowUnsandboxed;
     results.push(
       line("config.exec.allowUnsandboxed default off / env toggles", def === false && off === false && on === true, `default=${def} off=${off} on=${on}`),
     );
@@ -71,17 +71,17 @@ async function main(): Promise<void> {
     } catch {
       threwWithout = true;
     }
-    process.env.APODEX_TEST_HOOKS = "1";
+    process.env.HIFI_TEST_HOOKS = "1";
     let workedWith = true;
     try {
       __setSandboxTier(null);
     } catch {
       workedWith = false;
     }
-    delete process.env.APODEX_TEST_HOOKS;
+    delete process.env.HIFI_TEST_HOOKS;
     results.push(
       line(
-        "__setSandboxTier guarded (throws without APODEX_TEST_HOOKS)",
+        "__setSandboxTier guarded (throws without HIFI_TEST_HOOKS)",
         threwWithout && workedWith,
         `without=${threwWithout ? "threw" : "RAN(bad)"} with=${workedWith ? "ran" : "threw(bad)"}`,
       ),

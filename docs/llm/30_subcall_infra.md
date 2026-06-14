@@ -30,10 +30,10 @@ See also: [20_pipeline.md](20_pipeline.md) · [40_extension.md](40_extension.md)
 - Roles: `analyst | generator | grader | verifier | worker | judge | scout`.
   Spec value is `"session"` or `"<provider>/<model-id>"`.
 - **analyst** = the brief stage AND the triage classifier (`brief.analyze*`,
-  `triage.classify*` calls; session-heavy, thinking high, `APODEX_ANALYST`);
+  `triage.classify*` calls; session-heavy, thinking high, `HIFI_ANALYST`);
   **judge** = the pairwise selection judge
   (`selector.judge.*` calls); **scout** = the workspace context gatherer
-  (`context.scout.*` calls). All bindable via `.apodex.json` roles or env.
+  (`context.scout.*` calls). All bindable via `.hifi.json` roles or env.
 - **Judge is a heavy role (2026-06-12)**: defaults to the session model with
   thinking high (flash-class judges score below random on hard pairs,
   research survey §3.6). It no longer mirrors the worker.
@@ -63,37 +63,37 @@ in flight may overshoot the cap (observed 109%; predictive stop is backlog).
 
 ## Config (src/config.ts)
 
-Precedence: defaults ← `.apodex.json` (cwd) ← `APODEX_*` env ← inline
+Precedence: defaults ← `.hifi.json` (cwd) ← `HIFI_*` env ← inline
 overrides (tool params) ← scout worker-mirroring (step 3.5). Everything
 numeric is clamped (`CLAMPS` table) with warnings collected, never silently.
 K rounds 1..10, N candidates 1..8. Defaults: K=4, N=4, threshold 92, heavy
 roles (analyst/generator/grader/verifier/judge) = session,
 worker/scout = deepseek-v4-flash. `triage` block: `enabled` (default true,
-env `APODEX_TRIAGE_ENABLED`, file `triage.enabled`) - runs the triage
+env `HIFI_TRIAGE_ENABLED`, file `triage.enabled`) - runs the triage
 classifier first; a `mega` classification early-returns the slice roadmap
 instead of solving (see [20_pipeline.md](20_pipeline.md) invariant 19).
-`brief` block: `enabled` (default true, env `APODEX_BRIEF_ENABLED`, file
-`brief.enabled`). `exec` block: `enabled` (env `APODEX_EXEC_ENABLED`),
+`brief` block: `enabled` (default true, env `HIFI_BRIEF_ENABLED`, file
+`brief.enabled`). `exec` block: `enabled` (env `HIFI_EXEC_ENABLED`),
 `timeoutMs`, and `allowUnsandboxed` (default FALSE / fail-closed, env
-`APODEX_EXEC_ALLOW_UNSANDBOXED`, file `exec.allowUnsandboxed`) - the explicit
+`HIFI_EXEC_ALLOW_UNSANDBOXED`, file `exec.allowUnsandboxed`) - the explicit
 opt-in to bare-host execution when no sandbox tier exists (see the exec runner /
 `execAdmission`).
 
 New blocks (2026-06-12): `context` (enabled, maxRounds 1..4 = 2, maxFiles
 1..40 = 16, maxFileBytes = 16 KB, maxTotalBytes = 48 KB, maxListingEntries =
-1500; env `APODEX_CONTEXT_ENABLED` / `APODEX_CONTEXT_MAX_*`) and `delivery`
-(planEnabled, env `APODEX_DELIVERY_PLAN`). The 48 KB pack rides along in
+1500; env `HIFI_CONTEXT_ENABLED` / `HIFI_CONTEXT_MAX_*`) and `delivery`
+(planEnabled, env `HIFI_DELIVERY_PLAN`). The 48 KB pack rides along in
 EVERY downstream call's input - with expensive session-bound heavy roles this
 is the dominant marginal cost; cap it via `context.maxTotalBytes`.
 
-`composer` block: `enabled` (default TRUE, env `APODEX_COMPOSER`, file
+`composer` block: `enabled` (default TRUE, env `HIFI_COMPOSER`, file
 `composer.enabled`) - selects the work-primitive composer path
 (`runComposerHifi`, the designed engine) over the linear runHifi middle. Default
 ON: the composer is the execution path; linear `runHifi` is the reversible
-fallback (`APODEX_COMPOSER=0`). The eval pins it OFF explicitly for comparability
+fallback (`HIFI_COMPOSER=0`). The eval pins it OFF explicitly for comparability
 with the published linear-pipeline runs. See [25_composer.md](25_composer.md).
 
-`polyglot` (top-level boolean, default TRUE, env `APODEX_POLYGLOT`, 3.5):
+`polyglot` (top-level boolean, default TRUE, env `HIFI_POLYGLOT`, 3.5):
 stack-agnostic code generation. ON - the generator emits the language the task
 requires (`<lang> solution`/`<lang> selftest`); OFF - the legacy forced-JS
 convention. The eval pins it OFF for comparability with the published JS runs;
@@ -150,6 +150,6 @@ unchanged - the runCell condition is byte-identical to the old
 degraded-+-`untrusted` refusal, opus-verified across all tier×untrusted cases).
 `runExperiment` (runner.ts, eval-only) stays fail-closed (`untrusted` defaults
 true -> degraded refuses). `__setSandboxTier` is now GUARDED: it throws unless
-`APODEX_TEST_HOOKS=1` (selftests set it in-process), so the process-global tier
+`HIFI_TEST_HOOKS=1` (selftests set it in-process), so the process-global tier
 override is inert in a normal embed; even a leaked env cannot weaken the boundary
 (forcing a fake `rootless` fails closed when systemd-run/bwrap won't spawn).

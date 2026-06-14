@@ -8,7 +8,7 @@ touches: src/, eval/, index.ts
 
 See also: [20_pipeline.md](20_pipeline.md) · [50_eval.md](50_eval.md) · [90_lessons.md](90_lessons.md).
 
-pi-apodex is a **verification-centric inference-time reasoning layer** for the
+pi-hifi is a **verification-centric inference-time reasoning layer** for the
 Pi coding agent: an open replication of the inference-time portion of the
 Apodex-1.0 agent-team method (candidates -> execution-grounded selection ->
 generate-verify-revise -> claim-level external audit -> evidence-disciplined
@@ -25,8 +25,8 @@ extra budget-capped LLM sub-calls, not by changing or training models.
 - Reported evaluation: `docs/eval-results/20260611-164416/` - flash engine
   0.96 -> 1.00 overall (design 0.89 -> 1.00), pro engine 0.99 -> 0.99
   (saturated, reported honestly).
-- Published: https://github.com/veschin/pi-apodex (public, MIT).
-- Installed locally via symlink `~/.pi/agent/extensions/pi-apodex`.
+- Published: https://github.com/veschin/pi-hifi (public, MIT).
+- Installed locally via symlink `~/.pi/agent/extensions/pi-hifi`.
 
 ## Explicitly OUT of scope (v1)
 

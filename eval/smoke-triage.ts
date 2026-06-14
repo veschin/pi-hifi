@@ -29,18 +29,18 @@ async function main(): Promise<void> {
   // mega arm early-returns before them; the micro arm stays small). Spend capped.
   const env = {
     ...process.env,
-    APODEX_ANALYST: "deepseek/deepseek-v4-flash",
-    APODEX_GENERATOR: "deepseek/deepseek-v4-flash",
-    APODEX_GRADER: "deepseek/deepseek-v4-flash",
-    APODEX_VERIFIER: "deepseek/deepseek-v4-flash",
-    APODEX_WORKER: "deepseek/deepseek-v4-flash",
-    APODEX_JUDGE: "deepseek/deepseek-v4-flash",
-    APODEX_BRIEF_ENABLED: "0",
-    APODEX_CONTEXT_ENABLED: "0",
-    APODEX_DELIVERY_PLAN: "0",
-    APODEX_MAX_SUBCALLS: process.env.APODEX_MAX_SUBCALLS ?? "20",
-    APODEX_MAX_COST_USD: process.env.APODEX_MAX_COST_USD ?? "0.5",
-    APODEX_MAX_WALL_TIME_MS: process.env.APODEX_MAX_WALL_TIME_MS ?? "180000",
+    HIFI_ANALYST: "deepseek/deepseek-v4-flash",
+    HIFI_GENERATOR: "deepseek/deepseek-v4-flash",
+    HIFI_GRADER: "deepseek/deepseek-v4-flash",
+    HIFI_VERIFIER: "deepseek/deepseek-v4-flash",
+    HIFI_WORKER: "deepseek/deepseek-v4-flash",
+    HIFI_JUDGE: "deepseek/deepseek-v4-flash",
+    HIFI_BRIEF_ENABLED: "0",
+    HIFI_CONTEXT_ENABLED: "0",
+    HIFI_DELIVERY_PLAN: "0",
+    HIFI_MAX_SUBCALLS: process.env.HIFI_MAX_SUBCALLS ?? "20",
+    HIFI_MAX_COST_USD: process.env.HIFI_MAX_COST_USD ?? "0.5",
+    HIFI_MAX_WALL_TIME_MS: process.env.HIFI_MAX_WALL_TIME_MS ?? "180000",
   };
   const { config, warnings } = loadConfig({ cwd: process.cwd(), env, overrides: { rounds: 1, candidates: 1 } });
   if (!config.triage.enabled) {

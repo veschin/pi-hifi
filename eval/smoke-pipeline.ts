@@ -12,12 +12,12 @@ than the array, non-integer size, and non-array input. Make it production-grade.
 async function main(): Promise<void> {
   const env = {
     ...process.env,
-    APODEX_GENERATOR: process.env.APODEX_GENERATOR ?? "deepseek/deepseek-v4-pro",
-    APODEX_GRADER: process.env.APODEX_GRADER ?? "deepseek/deepseek-v4-pro",
-    APODEX_VERIFIER: process.env.APODEX_VERIFIER ?? "deepseek/deepseek-v4-pro",
-    APODEX_WORKER: process.env.APODEX_WORKER ?? "deepseek/deepseek-v4-flash",
+    HIFI_GENERATOR: process.env.HIFI_GENERATOR ?? "deepseek/deepseek-v4-pro",
+    HIFI_GRADER: process.env.HIFI_GRADER ?? "deepseek/deepseek-v4-pro",
+    HIFI_VERIFIER: process.env.HIFI_VERIFIER ?? "deepseek/deepseek-v4-pro",
+    HIFI_WORKER: process.env.HIFI_WORKER ?? "deepseek/deepseek-v4-flash",
     // Pre-brief smoke: assertions target the candidate/GVR path only.
-    APODEX_BRIEF_ENABLED: process.env.APODEX_BRIEF_ENABLED ?? "0",
+    HIFI_BRIEF_ENABLED: process.env.HIFI_BRIEF_ENABLED ?? "0",
   };
   const { config, warnings } = loadConfig({
     cwd: process.cwd(),

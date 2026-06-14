@@ -58,7 +58,7 @@ async function spawnBareHost(files: Record<string, string>, argv: string[], time
   }
   let dir: string;
   try {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), "apodex-exec-"));
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "hifi-exec-"));
   } catch (err) {
     return { ran: false, exitCode: null, stdout: "", stderr: "", timedOut: false, skippedReason: `tempdir creation failed: ${err instanceof Error ? err.message : String(err)}` };
   }

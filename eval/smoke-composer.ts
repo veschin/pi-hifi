@@ -48,14 +48,14 @@ function newClient(config: HifiConfig, registry: ReturnType<typeof createStandal
 async function main(): Promise<void> {
   const env = {
     ...process.env,
-    APODEX_GENERATOR: process.env.APODEX_GENERATOR ?? "deepseek/deepseek-v4-pro",
-    APODEX_JUDGE: process.env.APODEX_JUDGE ?? "deepseek/deepseek-v4-pro",
-    APODEX_ANALYST: process.env.APODEX_ANALYST ?? "deepseek/deepseek-v4-pro",
-    APODEX_WORKER: process.env.APODEX_WORKER ?? "deepseek/deepseek-v4-flash",
-    APODEX_BRIEF_ENABLED: process.env.APODEX_BRIEF_ENABLED ?? "0",
-    APODEX_CONTEXT_ENABLED: process.env.APODEX_CONTEXT_ENABLED ?? "0",
-    APODEX_COMPOSER: "1",
-    APODEX_CANDIDATES: process.env.APODEX_CANDIDATES ?? "2",
+    HIFI_GENERATOR: process.env.HIFI_GENERATOR ?? "deepseek/deepseek-v4-pro",
+    HIFI_JUDGE: process.env.HIFI_JUDGE ?? "deepseek/deepseek-v4-pro",
+    HIFI_ANALYST: process.env.HIFI_ANALYST ?? "deepseek/deepseek-v4-pro",
+    HIFI_WORKER: process.env.HIFI_WORKER ?? "deepseek/deepseek-v4-flash",
+    HIFI_BRIEF_ENABLED: process.env.HIFI_BRIEF_ENABLED ?? "0",
+    HIFI_CONTEXT_ENABLED: process.env.HIFI_CONTEXT_ENABLED ?? "0",
+    HIFI_COMPOSER: "1",
+    HIFI_CANDIDATES: process.env.HIFI_CANDIDATES ?? "2",
   };
   const { config, warnings } = loadConfig({ cwd: process.cwd(), env });
   const tier = await detectSandbox();

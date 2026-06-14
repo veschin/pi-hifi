@@ -1,4 +1,4 @@
-# pi-apodex
+# pi-hifi
 
 Verification-centric inference-time reasoning layer for the Pi coding agent:
 an open replication of the Apodex-1.0 agent-team method (parallel candidates
@@ -14,7 +14,7 @@ gate: the composer must be verified across every advertised mode (code/design/
 incident/general) and the real entry points - see the DONE block in
 `docs/llm/handoff.md`. Reported eval `docs/eval-results/20260611-164416` (linear
 arm: flash 0.96->1.00, pro 0.99->0.99); published at
-https://github.com/veschin/pi-apodex.
+https://github.com/veschin/pi-hifi.
 
 ## Session start
 
@@ -68,7 +68,7 @@ cumulative deviations that defer the finish = total failure.
 10. **Do not cram a broken half-state into exhausted context - and do not use
     "don't cram" as an excuse to defer the finish.** Committed green slices, but
     the finish is the job.
-11. `__setSandboxTier` is test-only (throws without `APODEX_TEST_HOOKS=1`); never
+11. `__setSandboxTier` is test-only (throws without `HIFI_TEST_HOOKS=1`); never
     call it from product code.
 
 ## Reference docs (load on demand)

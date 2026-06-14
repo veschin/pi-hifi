@@ -1,4 +1,4 @@
-// Standalone (no pi session) wiring for the apodex engine: resolves models and
+// Standalone (no pi session) wiring for the pi-hifi engine: resolves models and
 // credentials exactly the way pi does - AuthStorage (auth.json + env) and
 // ModelRegistry - without ever touching key material here.
 
