@@ -41,14 +41,16 @@ point; `config.composer.enabled` default true; run.json `"path":"composer"`):
   cleared it: no false-green grounding (hifi cannot render while flagged),
   fail-closed admission untouched, observation gates untouched.
 
-**HONEST GAP - the one advertised AC NOT re-run live this session:** T4
-clarification (mega -> roadmap; ambiguous -> brief questions -> approved-brief
-re-invoke). It is wired in `runComposerHifi` IDENTICALLY to the proven linear
-front (shared triage/brief stages), FREE-tested, and its render is FREE-tested
-(`delivery-render-selftest` roadmap/questions/brief-review). It was NOT paid-
-verified live here (deliberate: not spending to re-prove design-confirmed,
-free-tested wiring). To close it live, run a mega + an ambiguous task through the
-composer and confirm the `clarification` shapes.
+- **CLARIFICATION (T4)** - VERIFIED LIVE through the composer, 9/9 shape
+  assertions: a mega task -> triage scale=mega -> 13-milestone roadmap
+  clarification, finalAnswer "", run.json status "needs-clarification"; an
+  ambiguous interactive task -> brief paused with 5 questions, finalAnswer "";
+  re-invoke with a `# Approved brief` section -> analyst skipped, decompose ->
+  composer -> a full 11k-char answer (run.json path=composer / completed /
+  brief=approved). Stateless re-invoke honored end to end.
+
+Every advertised AC (code/design/incident/general modes, context grounding,
+clean delivery, clarification) is now OBSERVED live through the composer.
 
 > If the human says this DONE definition is wrong, rewrite ONLY this block from
 > his one-line correction; everything below still applies.
@@ -112,10 +114,11 @@ NOW VERIFIED this session (evidence in the DONE block above):
   null linear fields; no "n/a / null" noise. FREE-locked + observed live. opus
   critic cleared (no false-green, fail-closed admission + observation gates intact).
 
-STILL NOT LIVE-VERIFIED (the one honest gap, T4):
-- Clarification pauses (mega roadmap, brief questions) + re-invoke through the
-  composer: wired IDENTICALLY to the proven linear front (shared triage/brief) +
-  FREE-tested + render FREE-tested, but not paid-verified live this session.
+ALSO VERIFIED LIVE this session (T4 clarification through the composer):
+- mega -> 13-milestone roadmap (finalAnswer "", run.json needs-clarification);
+  ambiguous interactive -> brief paused with 5 questions; re-invoke with a
+  `# Approved brief` section -> analyst skipped -> full 11k answer (run.json
+  path=composer / completed / brief=approved). 9/9 shape assertions.
 
 NOT built - ASPIRATIONAL, OUT OF SCOPE FOR DONE (do not touch this session):
 - Research tier (read/grep/list/web), the rest of experiment/factcheck, revise,
