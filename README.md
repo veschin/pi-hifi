@@ -122,11 +122,14 @@ is a fresh run that reads your appended section.
 
 ### Getting the agent to delegate
 
-Models tend to over-trust their own single pass and under-use the tool. To
-counter that, the extension appends a short **delegation directive** to each
-turn's system prompt: delegate hard, large, or correctness-critical tasks to
-`hifi`, and on a mega roadmap take one slice rather than building it all yourself.
-Opt out with `HIFI_DIRECTIVE=0`.
+Models tend to over-trust their own single pass and under-use the tool - or the
+opposite, dumping a whole multi-file feature into one call. The extension ships a
+bundled skill, **`hifi-verified-slices`**, contributed to every session via
+`resources_discover`. It teaches the host model how to use `hifi`: slice work into
+bounded, independently-checkable pieces and delegate one verified slice at a time,
+rather than one-shotting a hard task or handing it a monolith. Pi keeps the
+skill's description in context and the model reads the full skill on demand (force
+it with `/skill:hifi-verified-slices`).
 
 ---
 

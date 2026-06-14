@@ -79,18 +79,21 @@ function composerResult(
 async function main(): Promise<void> {
   const r: boolean[] = [];
 
-  // roadmap with milestones: each numbered, mega framing, slice NEXT STEP.
+  // roadmap with milestones: each numbered, mega framing, anti-recursion NEXT STEP
+  // (build the glue yourself, delegate only verifiable atoms, never re-delegate a
+  // whole milestone - the recursion trap deepseek-v4-pro fell into 2026-06-14).
   {
     const out = composeDelivery(clarResult(roadmap(["terrain gen", "block I/O", "lighting"])));
     r.push(
       line(
-        "roadmap render: milestones + mega framing + slice directive",
+        "roadmap render: milestones + mega framing + atom-delegation directive",
         /mega/i.test(out) &&
           out.includes("1. terrain gen") &&
           out.includes("2. block I/O") &&
           out.includes("3. lighting") &&
           /NEXT STEP/.test(out) &&
-          /one slice|ONE slice/i.test(out),
+          /build the scaffolding[\s\S]*yourself/i.test(out) &&
+          /do NOT re-invoke hifi on a whole milestone/i.test(out),
         out.split("\n")[0] ?? "(empty)",
       ),
     );
