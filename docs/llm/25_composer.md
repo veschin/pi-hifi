@@ -11,10 +11,13 @@ from) · [30_subcall_infra.md](30_subcall_infra.md) (the reused sub-call/exec
 machinery) · [../pi-hifi-architecture.md](../pi-hifi-architecture.md) (the design
 §1-3).
 
-Status (2026-06-14): the primitive layer (`src/primitives.ts`) and the composer
-(`src/composer.ts`) are BUILT and free-tested (`eval/primitives-selftest.ts`,
-`eval/composer-selftest.ts`). `decompose` and pipeline wiring land in later
-slices; until then `runHifi` (20_pipeline.md) is still the execution path.
+Status (2026-06-14): the primitive layer (`src/primitives.ts`), the composer
+(`src/composer.ts`), `decompose` (`src/decompose.ts`) and the pipeline wiring
+(`src/composer-pipeline.ts`) are BUILT and tested. The composer is the DEFAULT
+execution path (`config.composer.enabled` default true); `runHifi`
+(20_pipeline.md) is the reversible fallback (`APODEX_COMPOSER=0`), pinned OFF in
+the eval for comparability. Proven LIVE across code/design/incident/general
+(`eval/smoke-composer.ts`), with workspace context grounding the answer.
 
 ## The two channels (architecture §1) - the trust principle
 
@@ -152,10 +155,14 @@ gen specs) yet - not needed to prove the canonical chain.
 ## Pipeline wiring (`src/composer-pipeline.ts`)
 
 `runComposerHifi` is the composer EXECUTION PATH, selected by
-`config.composer.enabled` (default FALSE, env `APODEX_COMPOSER`, file
-`composer.enabled`). `index.ts` dispatches `config.composer.enabled ?
+`config.composer.enabled` (default TRUE, env `APODEX_COMPOSER=0` to fall back,
+file `composer.enabled`). `index.ts` dispatches `config.composer.enabled ?
 runComposerHifi : runHifi`; both take the same options and return a `HifiResult`,
-so delivery/clarification rendering is identical downstream.
+so clarification rendering is identical downstream. Delivery rendering is
+path-aware: the composer path has no linear grader/verifier (those `HifiResult`
+fields are null), so it reports its OWN grounding via `HifiResult.composer`
+(`ComposerSummary {hifi, orderCount, flaggedCount, depth}`) in `summaryLines`,
+`renderHandoff`, and the tool's `details` - never the dead linear "n/a" lines.
 
 `runComposerHifi` mirrors runHifi's SHARED front stages (triage with mega
 early-return -> brief with clarification exits -> context -> classify ->

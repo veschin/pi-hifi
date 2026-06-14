@@ -17,8 +17,10 @@ import { SubCallClient } from "../src/llm.ts";
 import { RoleResolver } from "../src/roles.ts";
 import { detectSandbox, execAdmission } from "../src/sandbox.ts";
 import { RunStore } from "../src/store.ts";
-import type { HifiConfig } from "../src/types.ts";
+import type { HifiConfig, HifiResult, TaskMode } from "../src/types.ts";
 import { createStandaloneRegistry } from "./standalone.ts";
+import { designTasks } from "./tasks/design.ts";
+import { incidentTasks } from "./tasks/incident.ts";
 
 const TASK = `Write a JavaScript (ESM) function "chunk(array, size)" that splits an array into
 chunks of the given size. Define behavior for: empty array, size <= 0 (throw),
@@ -111,6 +113,52 @@ async function main(): Promise<void> {
     const runs = composed.orders.filter((o) => o.primitive === "run");
     check("run2: both run orders OBSERVED real execution", runs.length === 2 && runs.every((o) => o.gate?.pass === true), `${runs.filter((o) => o.gate?.pass).length}/${runs.length} observed`);
     check("run2: judge saw execution evidence", judgeOrder?.observation?.kind === "verdict" && judgeOrder.observation.sawEvidence === true, "evidence-grounded selection");
+  }
+
+  // ===== Run 3: mode sweep - design, incident, general live via runComposerHifi =====
+  // T2 AC2-AC4: the composer must return an on-shape answer for EVERY advertised
+  // mode, not just code. The binary checks here are GUARANTEED invariants only
+  // (no throw, non-empty answer, run.json path=composer, mode preserved, the graph
+  // ends in synthesize). The CONTENT quality - architecture + failure-modes +
+  // rejected alternative for design, root-cause + evidence chain for incident,
+  // coherence for general - is emergent model output, so it is OBSERVED by printing
+  // the full answer (see the log), never asserted as a false-green test invariant.
+  const GENERAL_TASK = `A mid-size engineering team keeps missing sprint commitments: roughly 40% of
+committed stories spill over each sprint. Standups happen on time, the backlog is
+groomed, and velocity looks stable on paper. Explain the most likely systemic
+causes and give a concrete, prioritized plan to address it. State your assumptions
+and what evidence would confirm or refute each cause.`;
+
+  const sweep: Array<{ mode: TaskMode; task: string; label: string }> = [
+    { mode: "design", task: designTasks[0]!.prompt, label: "design" },
+    { mode: "incident", task: incidentTasks[0]!.prompt, label: "incident" },
+    { mode: "general", task: GENERAL_TASK, label: "general" },
+  ];
+
+  for (const { mode, task, label } of sweep) {
+    console.error(`\n[smoke] === RUN 3.${label}: runComposerHifi mode=${mode} ===`);
+    const tx = Date.now();
+    let res: HifiResult | null = null;
+    let threw = "";
+    try {
+      res = await runComposerHifi({ config, configWarnings: warnings, registry, task, mode, cwd: process.cwd(), onProgress: (m) => console.error(`[3.${label}] ${m}`) });
+    } catch (e) {
+      threw = e instanceof Error ? e.message : String(e);
+    }
+    check(`run3.${label}: no throw`, threw === "" && res !== null, threw || "returned");
+    if (!res) continue;
+    const runJson = fs.existsSync(`${res.runDir}/run.json`) ? JSON.parse(fs.readFileSync(`${res.runDir}/run.json`, "utf8")) : null;
+    const comp: ComposerArtifact | null = fs.existsSync(`${res.runDir}/composer.json`) ? JSON.parse(fs.readFileSync(`${res.runDir}/composer.json`, "utf8")) : null;
+    const prims = new Set(comp?.orders.map((o) => o.primitive) ?? []);
+    console.log(`\n=== RUN 3.${label} RESULT (mode=${res.mode}) ===`);
+    console.log(`run.json:  status=${runJson?.status} path=${runJson?.path} composerHifi=${runJson?.composerHifi} taskShape=${runJson?.taskShape}`);
+    console.log(`composer:  hifi=${comp?.hifi} orders=[${comp?.orders.map((o) => `${o.id}:${o.gate?.pass ? "PASS" : o.skipped ? "SKIP" : "FAIL"}`).join(" ")}]`);
+    console.log(`answer:    ${res.finalAnswer.length} chars; $${res.budget.costUsd.toFixed(4)}; ${Math.round((Date.now() - tx) / 1000)}s`);
+    console.log(`--- ${label} answer (full, for eyes-on observation) ---\n${res.finalAnswer}\n--- end ${label} answer ---`);
+    check(`run3.${label}: non-empty answer`, res.finalAnswer.trim().length > 0, `${res.finalAnswer.length} chars`);
+    check(`run3.${label}: run.json path=composer`, runJson?.path === "composer", `path=${runJson?.path} status=${runJson?.status}`);
+    check(`run3.${label}: mode preserved`, res.mode === mode, `mode=${res.mode}`);
+    check(`run3.${label}: graph ends in synthesize (gen+synthesize present)`, prims.has("gen") && prims.has("synthesize"), [...prims].join(","));
   }
 
   console.log("\n=== ASSERTIONS ===");

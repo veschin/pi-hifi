@@ -15,6 +15,7 @@ import type { SubCallClient } from "./llm.ts";
 import { DELIVERY_PLANNER_SYSTEM, deliveryPlannerUser } from "./prompts.ts";
 import type {
   BudgetSnapshot,
+  ComposerSummary,
   ContextPack,
   DeliveryPlan,
   ProgressFn,
@@ -100,6 +101,9 @@ export interface HandoffInput {
   mode: TaskMode;
   bestScore: number | null;
   verification: VerificationReport | null;
+  /** Composer-path summary; when set, the handoff reports it instead of the
+   * linear grader/atoms/verifier lines (which are null on the composer path). */
+  composer: ComposerSummary | null;
   contextPack: ContextPack | null;
   deliveryPlan: DeliveryPlan | null;
   budget: BudgetSnapshot;
@@ -131,15 +135,29 @@ export function renderHandoff(input: HandoffInput): string {
     : "stage not run";
   const plan = input.deliveryPlan;
 
+  // Grounding lines are path-specific: the composer path has no linear grader/
+  // verifier (those fields are null -> would render as dead "n/a"); it reports its
+  // OWN evidence - the per-primitive hifi gate result (architecture §0: a run is
+  // "hifi or honestly flagged").
+  const c = input.composer;
+  const groundingLines = c
+    ? [
+        `- composer: ${c.depth} candidate(s) -> ${c.orderCount} gated work-order(s)${c.flaggedCount > 0 ? `, ${c.flaggedCount} flagged` : ""}`,
+        `- run grounding: ${c.hifi ? "fully grounded (every executed order passed its observation gate)" : "PARTIAL - some orders skipped or gate-flagged (see run.json / composer.json)"}`,
+      ]
+    : [
+        `- best grader score: ${input.bestScore ?? "n/a"}/100`,
+        `- claim atoms: ${verified} verified / ${unsupported} unsupported / ${contradicted} contradicted`,
+        `- external verifier: ${holistic}`,
+      ];
+
   const lines: string[] = [
     `# pi-hifi handoff - ${input.runId}`,
     "",
     `Task (first 300 chars): ${input.task.length > 300 ? `${input.task.slice(0, 300)}...` : input.task}`,
     "",
     `- mode: ${input.mode}`,
-    `- best grader score: ${input.bestScore ?? "n/a"}/100`,
-    `- claim atoms: ${verified} verified / ${unsupported} unsupported / ${contradicted} contradicted`,
-    `- external verifier: ${holistic}`,
+    ...groundingLines,
     `- workspace context: ${contextLine}`,
     `- spend: $${input.budget.costUsd.toFixed(4)}, ${input.budget.subCalls} sub-calls, ${input.budget.totalTokens} tokens${input.budgetExhausted ? " (BUDGET EXHAUSTED - best-so-far answer)" : ""}`,
     "",

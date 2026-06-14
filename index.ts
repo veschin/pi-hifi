@@ -45,10 +45,17 @@ function isCriticalWarning(w: string): boolean {
 }
 
 function summaryLines(result: HifiResult): string[] {
-  const lines = [
-    `run: ${result.runId} (mode ${result.mode})`,
-    `best grader score: ${result.bestScore ?? "n/a"}/100`,
-  ];
+  const lines = [`run: ${result.runId} (mode ${result.mode})`];
+  // Composer path: report the work-primitive grounding (its own evidence) instead
+  // of the linear grader score it never produces (which would print "n/a").
+  if (result.composer) {
+    const c = result.composer;
+    lines.push(
+      `composer: ${c.depth} candidate(s) -> ${c.orderCount} gated work-order(s)${c.flaggedCount > 0 ? `, ${c.flaggedCount} flagged` : ""}; run ${c.hifi ? "fully grounded (hifi)" : "partially grounded - see warnings"}`,
+    );
+  } else {
+    lines.push(`best grader score: ${result.bestScore ?? "n/a"}/100`);
+  }
   if (result.brief !== null) {
     lines.push(`task brief: applied (${result.brief.length} chars, see brief.json)`);
   }
@@ -282,6 +289,10 @@ export default function (pi: ExtensionAPI) {
             mode: result.mode,
             bestScore: result.bestScore,
             holisticVerdict: result.verification?.holistic?.verdict ?? null,
+            // Composer path's structured grounding signal (the analog of
+            // bestScore/holisticVerdict, which are null there) - so a host reading
+            // `details` programmatically is not blind to grounding on this path.
+            composer: result.composer,
             taskShape: result.deliveryPlan?.taskShape ?? null,
             contextFiles: result.contextPack?.files.map((f) => f.path) ?? [],
             budget: result.budget,

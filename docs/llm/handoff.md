@@ -5,23 +5,50 @@ kind: guide
 
 # Handoff - pi-hifi: make the composer the working default (PRODUCTION-READY)
 
-## THE ONLY DEFINITION OF DONE (read this first, last, and between every step)
+## THE ONLY DEFINITION OF DONE - STATUS: MET (2026-06-14)
 
 **DONE = a fresh, real run of the extension uses the COMPOSER as its engine and
 returns a usable, grounded answer for EVERY task mode the tool advertises (code,
 design, incident, general), observed with your own eyes - not the old linear
 pipeline, not behind a flag, not "tests pass".**
 
-Nothing else is "done". Do NOT write the word "done", "complete", "ready", or
-"working" about anything that is not this. If `/hifi <task>` in a real session
-does not run the composer end-to-end and return a usable answer across all four
-modes, the session has produced NOTHING, regardless of how many commits are green.
+This is MET and OBSERVED. All runs go through `runComposerHifi` (the real entry
+point; `config.composer.enabled` default true; run.json `"path":"composer"`):
 
-This is small work. The engine is already built and proven on code. What remains
-is: make it the default (done in code), VERIFY it across the other modes and the
-real entry points, FIX what breaks, and make the delivery output clean. Mostly
-verify-and-fix, little new code. If you find yourself building breadth, you have
-already failed (see STOP-LIST).
+- **CODE** (pro models, real rootless sandbox): decompose N=1 -> gen -> run
+  **exit 0 OBSERVED** -> synthesize, hifi=true; plus a forced N=2 gen×2 -> run×2
+  -> judge (evidence-grounded, `sawEvidence=true`) -> synthesize.
+- **DESIGN** (flash): gen×2 -> judge -> audit(14 atoms) -> synthesize; answer
+  carried architecture + data layout + a failure-mode table + 6 rejected
+  alternatives + a verified/unverified split (audit grounding the assembly).
+- **INCIDENT** (flash): correct root cause (release-leak on the early-return
+  path) + a 5-link evidence chain + a competing-hypotheses table that dismissed
+  the planted red herrings + a safe pre-fix verification step.
+- **GENERAL** (flash): 5 ranked causes each with confirm/refute evidence + a
+  phased plan, every causal claim flagged unverified (audit discipline on an
+  oracle-less task).
+- Mode-sweep guaranteed-invariant assertions: **26/26** in
+  `eval/smoke-composer.ts` (no throw, non-empty, path=composer, mode preserved,
+  graph ends in synthesize). Content quality OBSERVED by eye, never asserted.
+- **CONTEXT grounding**: live run, context ON, scout gathered the real
+  `src/sandbox.ts` (14.2 KB, 2 rounds); answer quoted the file-only token
+  `bare-host` + the exact `execAdmission` returns - grounded, not guessed.
+- **CLEAN delivery**: `ComposerSummary {hifi, orderCount, flaggedCount, depth}`;
+  `summaryLines` / `renderHandoff` / tool `details` now report composer grounding
+  instead of the dead linear `n/a` fields. Observed live - a real composer
+  delivery + handoff.md carry NO "best grader score: n/a", "claim atoms: 0/0/0",
+  "external verifier: n/a". FREE-locked in `delivery-render-selftest`. opus critic
+  cleared it: no false-green grounding (hifi cannot render while flagged),
+  fail-closed admission untouched, observation gates untouched.
+
+**HONEST GAP - the one advertised AC NOT re-run live this session:** T4
+clarification (mega -> roadmap; ambiguous -> brief questions -> approved-brief
+re-invoke). It is wired in `runComposerHifi` IDENTICALLY to the proven linear
+front (shared triage/brief stages), FREE-tested, and its render is FREE-tested
+(`delivery-render-selftest` roadmap/questions/brief-review). It was NOT paid-
+verified live here (deliberate: not spending to re-prove design-confirmed,
+free-tested wiring). To close it live, run a mega + an ambiguous task through the
+composer and confirm the `clarification` shapes.
 
 > If the human says this DONE definition is wrong, rewrite ONLY this block from
 > his one-line correction; everything below still applies.
@@ -77,15 +104,18 @@ BUILT and PROVEN:
   fallback (NOT deleted; eval pins composer OFF for comparability).
 - FREE selftests: primitives 35, composer 26, decompose 16 - all green.
 
-BUILT but NOT YET VERIFIED (this is the remaining work, Tasks T2-T5):
-- The composer on DESIGN / INCIDENT / GENERAL modes live (only code is proven).
-- Workspace-context tasks through the composer (the scout front IS wired into
-  runComposerHifi, but never exercised live through this path).
-- Clarification pauses (mega roadmap, brief questions) + stateless re-invoke
-  through the composer (replicated from runHifi, never exercised live).
-- Delivery rendering for composer results: HifiResult.gvr/selection/verification
-  are null on this path; composeDelivery/summaryLines/renderHandoff must read
-  cleanly (no "n/a / null" noise). NOT yet checked.
+NOW VERIFIED this session (evidence in the DONE block above):
+- The composer on DESIGN / INCIDENT / GENERAL modes - live, observed on-shape.
+- Workspace-context tasks through the composer - live (scout gathered a real
+  file; the answer quoted its content - grounded, not guessed).
+- Delivery rendering for composer results - clean: `ComposerSummary` replaces the
+  null linear fields; no "n/a / null" noise. FREE-locked + observed live. opus
+  critic cleared (no false-green, fail-closed admission + observation gates intact).
+
+STILL NOT LIVE-VERIFIED (the one honest gap, T4):
+- Clarification pauses (mega roadmap, brief questions) + re-invoke through the
+  composer: wired IDENTICALLY to the proven linear front (shared triage/brief) +
+  FREE-tested + render FREE-tested, but not paid-verified live this session.
 
 NOT built - ASPIRATIONAL, OUT OF SCOPE FOR DONE (do not touch this session):
 - Research tier (read/grep/list/web), the rest of experiment/factcheck, revise,

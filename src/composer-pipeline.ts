@@ -38,6 +38,7 @@ import {
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type {
   Clarification,
+  ComposerSummary,
   ContextPack,
   DeliveryPlan,
   HifiConfig,
@@ -145,6 +146,7 @@ export async function runComposerHifi(opts: ComposerPipelineOptions): Promise<Hi
   let finalAnswer = "";
   let budgetExhausted = false;
   let composed: ComposerResult | null = null;
+  let composerSummary: ComposerSummary | null = null;
 
   // One clarification-pause shape, mirroring runHifi.clarReturn.
   const clarReturn = (clarification: Clarification): HifiResult => {
@@ -152,7 +154,7 @@ export async function runComposerHifi(opts: ComposerPipelineOptions): Promise<Hi
     store.writeJson("run.json", { status: "needs-clarification", runId, clarification, composition, budget: snapshot, warnings, finishedAt: new Date().toISOString() });
     return {
       runId, runDir: store.runDir, task, mode, finalAnswer: "", brief: null, clarification, composition,
-      bestScore: null, gvr: null, selection: null, verification: null, contextPack: null, deliveryPlan: null,
+      bestScore: null, gvr: null, selection: null, verification: null, composer: null, contextPack: null, deliveryPlan: null,
       budget: snapshot, budgetExhausted: false, warnings,
     };
   };
@@ -266,6 +268,12 @@ export async function runComposerHifi(opts: ComposerPipelineOptions): Promise<Hi
     warnings.push(...composed.warnings);
     budgetExhausted = composed.budgetExhausted;
     finalAnswer = extractFinalAnswer(composed);
+    composerSummary = {
+      hifi: composed.hifi,
+      orderCount: composed.orders.length,
+      flaggedCount: composed.orders.filter((o) => o.skipped || o.gate?.pass === false).length,
+      depth: decomposed.plan.candidates,
+    };
 
     if (composed.paused) {
       // CONTRACT GAP (the checkpoint slice must close this): the canonical graph
@@ -308,14 +316,14 @@ export async function runComposerHifi(opts: ComposerPipelineOptions): Promise<Hi
 
   const result: HifiResult = {
     runId, runDir: store.runDir, task, mode, finalAnswer, brief: briefText, clarification: null, composition,
-    bestScore: null, gvr: null, selection: null, verification: null, contextPack, deliveryPlan,
+    bestScore: null, gvr: null, selection: null, verification: null, composer: composerSummary, contextPack, deliveryPlan,
     budget: budget.snapshot(), budgetExhausted, warnings,
   };
 
   store.writeText("final.md", finalAnswer);
   if (deliveryPlan) store.writeJson("delivery.json", deliveryPlan);
   store.writeText("handoff.md", renderHandoff({
-    runId, task: enrichedTask, mode, bestScore: null, verification: null, contextPack, deliveryPlan,
+    runId, task: enrichedTask, mode, bestScore: null, verification: null, composer: composerSummary, contextPack, deliveryPlan,
     budget: result.budget, budgetExhausted,
   }));
   store.writeJson("run.json", {

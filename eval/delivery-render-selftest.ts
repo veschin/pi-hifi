@@ -48,6 +48,34 @@ function normalResult(finalAnswer: string, warnings: string[] = []): HifiResult 
   } as unknown as HifiResult;
 }
 
+// Composer-path result: bestScore/gvr/verification are null (the composer reports
+// its OWN grounding via `composer`), so the render must surface the composer line
+// and carry NONE of the dead linear "n/a" noise.
+function composerResult(
+  finalAnswer: string,
+  composer: { hifi: boolean; orderCount: number; flaggedCount: number; depth: number },
+): HifiResult {
+  return {
+    runId: "run-test",
+    runDir: "/tmp/run-test",
+    finalAnswer,
+    clarification: null,
+    mode: "design",
+    bestScore: null,
+    brief: null,
+    composition: null,
+    gvr: null,
+    selection: null,
+    verification: null,
+    composer,
+    contextPack: null,
+    deliveryPlan: null,
+    budget: { subCalls: 5, totalTokens: 1000, inputTokens: 800, outputTokens: 200, costUsd: 0.01, elapsedMs: 12_000, limits: {} },
+    budgetExhausted: false,
+    warnings: [],
+  } as unknown as HifiResult;
+}
+
 async function main(): Promise<void> {
   const r: boolean[] = [];
 
@@ -120,8 +148,33 @@ async function main(): Promise<void> {
     );
   }
 
+  // composer path: the summary reports composer grounding and carries NO dead
+  // linear "n/a" lines (best grader score / claim atoms / external verifier).
+  {
+    const fully = composeDelivery(composerResult("## Design\n\nArchitecture: ...", { hifi: true, orderCount: 5, flaggedCount: 0, depth: 2 }));
+    r.push(
+      line(
+        "composer render: grounding line, fully-grounded, no dead n/a",
+        /composer: 2 candidate\(s\) -> 5 gated work-order\(s\)/.test(fully) &&
+          /fully grounded \(hifi\)/.test(fully) &&
+          !/best grader score/.test(fully) &&
+          !/\bn\/a\b/.test(fully) &&
+          /NEXT STEP/.test(fully),
+        fully.split("\n").find((l) => l.includes("composer:")) ?? "(no composer line)",
+      ),
+    );
+    const flagged = composeDelivery(composerResult("## Design\n\n...", { hifi: false, orderCount: 4, flaggedCount: 1, depth: 2 }));
+    r.push(
+      line(
+        "composer render: flagged run reported honestly (not hidden, not n/a)",
+        /1 flagged/.test(flagged) && /partially grounded/.test(flagged) && !/best grader score/.test(flagged),
+        flagged.split("\n").find((l) => l.includes("composer:")) ?? "(no composer line)",
+      ),
+    );
+  }
+
   const ok = r.every(Boolean);
-  console.log(ok ? "DELIVERY-RENDER-SELFTEST PASSED: clarification + normal rendering correct" : "DELIVERY-RENDER-SELFTEST FAILED");
+  console.log(ok ? "DELIVERY-RENDER-SELFTEST PASSED: clarification + normal + composer rendering correct" : "DELIVERY-RENDER-SELFTEST FAILED");
   if (!ok) process.exitCode = 1;
 }
 

@@ -315,6 +315,23 @@ export interface Clarification {
 
 // --- Pipeline ---
 
+/**
+ * Composer-path run summary: the grounding signal of a work-primitive DAG run -
+ * the analog of the linear path's grader/gvr/verification cluster. Surfaced in the
+ * user-facing delivery so the composer path reports its OWN evidence instead of the
+ * linear fields it never populates (which would otherwise render as dead "n/a").
+ */
+export interface ComposerSummary {
+  /** Whole-run hifi: every executed order passed its observation gate. */
+  hifi: boolean;
+  /** Total work-orders in the executed graph. */
+  orderCount: number;
+  /** Orders skipped or whose gate flagged (surfaced, never silently dropped). */
+  flaggedCount: number;
+  /** Parallel gen candidates the decompose stage planned (graph width / lanes). */
+  depth: number;
+}
+
 export interface HifiResult {
   runId: string;
   runDir: string;
@@ -331,6 +348,8 @@ export interface HifiResult {
   gvr: GvrResult | null;
   selection: SelectionResult | null;
   verification: VerificationReport | null;
+  /** Composer-path run summary (work-primitive DAG); null on the linear path. */
+  composer: ComposerSummary | null;
   contextPack: ContextPack | null;
   deliveryPlan: DeliveryPlan | null;
   budget: BudgetSnapshot;
