@@ -16,7 +16,14 @@ export function defaultConfig(): HifiConfig {
   return {
     roles: {
       analyst: { model: SESSION_MODEL, thinking: "high", temperature: 0.2, maxTokens: 8192 },
-      generator: { model: SESSION_MODEL, thinking: "high", temperature: 0.7, maxTokens: 16384 },
+      // generator emits the full candidate AND (via the synthesize primitive) the
+      // final answer. 16384 left no room once high reasoning ran: on a hard task
+      // glm-5.2 spent the whole 16384 budget thinking and returned EMPTY text
+      // (stopReason length). 32768 fits a bounded slice + reasoning; SubCallClient
+      // self-heals further (steps thinking down, doubles the ceiling) on an empty
+      // length-capped attempt. A genuinely-large task is caught by triage (mega ->
+      // roadmap) before it reaches a single gen call.
+      generator: { model: SESSION_MODEL, thinking: "high", temperature: 0.7, maxTokens: 32768 },
       grader: { model: SESSION_MODEL, thinking: "high", temperature: 0, maxTokens: 8192 },
       verifier: { model: SESSION_MODEL, thinking: "high", temperature: 0.2, maxTokens: 8192 },
       worker: { model: DEFAULT_WORKER_MODEL, thinking: "off", temperature: 0, maxTokens: 8192 },

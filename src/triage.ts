@@ -45,8 +45,17 @@ Return ONLY this JSON object:
 }
 
 Guidance:
-- scale: micro = one function/fix; bounded = one module/feature; mega = a whole
-  app/system that must be sliced (e.g. "build minecraft from scratch").
+- scale: micro = a one-line or localized fix; bounded = ONE self-contained code
+  artifact - a single algorithm, function, or module - deliverable as one code
+  block plus one runnable self-test. mega = anything that is NOT one such artifact:
+  multiple independent features, OR scaffolding / wiring / UI / glue across several
+  modules, OR a deliverable whose only real check needs a browser or full
+  integration the sandbox cannot run (e.g. "build minecraft"; "scaffold a web app";
+  "add shadows + PBR + AO + tonemapping" = several independent features). Judge by
+  the number of INDEPENDENT, separately-testable deliverables, NOT by file count: a
+  multi-file thing that produces ONE testable result is bounded, not mega. A mega
+  task returns a roadmap (the caller builds the glue and delegates the individual
+  verifiable artifacts); it is not solved in one pass.
 - oracle (how the result is proven): execute = runnable self-test; repo-suite =
   run the project's existing tests (modifications); bench = measure (perf);
   web = source-backed research; none = nothing to run (design/theory, or a

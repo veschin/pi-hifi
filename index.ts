@@ -12,6 +12,8 @@
 // cheap worker role defaults to deepseek-v4-flash. Every role is overridable
 // via HIFI_* env vars or .hifi.json (see README).
 
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
@@ -23,21 +25,15 @@ import type { HifiResult, DeliveryPlan, TaskMode } from "./src/types.ts";
 
 const MODE_VALUES = ["auto", "design", "code", "incident", "general"] as const;
 
-// Standing delegation directive injected into each turn's system prompt (see the
-// before_agent_start hook in the default export). The host model's overconfidence
-// in its own single pass is the failure this pipeline corrects; left to itself the
-// model under-uses the tool and one-shots hard tasks. This nudges it to delegate.
-const HIFI_USAGE_DIRECTIVE = [
-  "## pi-hifi delegation policy",
-  "When a task is non-trivial code, a system design, an incident diagnosis, or is",
-  "otherwise correctness-critical, large, or multi-component, delegate it to the",
-  "`hifi` tool instead of answering in a single pass. Do NOT judge your own",
-  "single-pass output as sufficient - that overconfidence is the failure hifi",
-  "prevents. If hifi returns a mega roadmap, do NOT build the whole thing yourself:",
-  "re-invoke hifi on milestone 1 as a self-contained task and continue slice by",
-  "slice. Do NOT dismiss hifi's steps as ceremony. Build scaffolding and glue",
-  "yourself; delegate the hard, verifiable pieces to hifi.",
-].join("\n");
+// The extension ships a bundled skill (skills/hifi-verified-slices/SKILL.md) that
+// teaches the host model HOW to use the hifi tool: slice large work into bounded,
+// independently-checkable pieces and delegate one verified slice at a time, rather
+// than one-shotting a hard task or dumping a whole feature/multi-file monolith. It
+// is contributed via the resources_discover hook below, so it loads with the
+// extension regardless of how the extension was installed (symlink, package, -e).
+// baseDir is this module's directory; the skill lives in a sibling skills/ folder.
+const baseDir = dirname(fileURLToPath(import.meta.url));
+const HIFI_SKILL_PATH = join(baseDir, "skills", "hifi-verified-slices", "SKILL.md");
 
 function fmtTokens(n: number): string {
   return n >= 10_000 ? `${(n / 1000).toFixed(1)}k` : String(n);
@@ -176,7 +172,7 @@ function composeClarification(result: HifiResult): string {
     return [
       `pi-hifi classified this as a LARGE (mega) task (run ${result.runId}) - it is not solved in one pass. Slice roadmap:`,
       milestones,
-      `NEXT STEP: present this roadmap to the user, then take the FIRST milestone (or ask the user which) and invoke the hifi tool again on that ONE slice as a self-contained task - it runs the full verification pipeline on the bounded slice. Do NOT build the whole system yourself in one pass, and do NOT dismiss this roadmap as ceremony: one-shot construction of a task this size is exactly the failure this pipeline prevents. Own the scaffolding and glue yourself; delegate each hard slice here.`,
+      `NEXT STEP: this task is too big to verify as one artifact. Build the scaffolding, wiring, UI, and glue YOURSELF - that is your job, not hifi's. From the roadmap, delegate to hifi ONLY pieces that are a single self-contained algorithm/function/module with a runnable check (e.g. a deterministic generator + a determinism test, a parser + a round-trip test, a mesher + a quad-count test). Do NOT re-invoke hifi on a whole milestone: a milestone is usually still glue + logic, so it comes back as another roadmap (that recursion is the trap). Extract the ONE hard, separately-testable piece from a milestone, delegate THAT alone, apply the verified result, and build the rest yourself.`,
     ].join("\n\n");
   }
   return [
@@ -250,21 +246,17 @@ async function execute(
 }
 
 export default function (pi: ExtensionAPI) {
-  // Self-advocating: append the delegation directive to each turn's system prompt
-  // so the model reaches for hifi on hard tasks instead of one-shotting them.
-  // Fires once per user turn, append-only (cannot break a turn); opt out with
-  // HIFI_DIRECTIVE=0.
-  if (process.env.HIFI_DIRECTIVE !== "0") {
-    pi.on("before_agent_start", (event) => {
-      if (typeof event.systemPrompt !== "string") return undefined;
-      return { systemPrompt: `${event.systemPrompt}\n\n${HIFI_USAGE_DIRECTIVE}` };
-    });
-  }
+  // Ship the usage skill with the extension. resources_discover contributes the
+  // skill path at load time, so Pi surfaces "hifi-verified-slices" in the skill
+  // list (progressive disclosure: its description is always in context, the full
+  // SKILL.md loads on demand) for every session this extension is active in - no
+  // per-turn system-prompt injection and no opt-out flag to manage.
+  pi.on("resources_discover", () => ({ skillPaths: [HIFI_SKILL_PATH] }));
   pi.registerTool({
     name: "hifi",
     label: "Hifi",
     description:
-      "Delegate a hard engineering task (system design, non-trivial code, incident diagnosis) to a verification-centric reasoning pipeline: a task analyst elaborates the task into a brief first (it may PAUSE the run and return clarification questions or a draft brief for user review - relay them to the user verbatim and re-invoke with the answers / approved brief appended exactly as the result instructs), then a scout stage gathers read-only workspace context (file listing + targeted reads), then parallel candidates with execution evidence, generate->verify->revise loops with an independent grader, external claim-by-claim verification, and an evidence-disciplined final answer with a delivery plan. The pipeline produces a VERIFIED ANSWER plus apply steps, not workspace changes: the answer is saved to <runDir>/final.md (plan: handoff.md) and the result carries a NEXT STEP - execute the apply steps yourself when the user asked for implementation. Costs multiple model sub-calls, so do not use it for trivial questions. Otherwise DELEGATE here whenever the task is non-trivial code, a system design, an incident diagnosis, or is correctness-critical or multi-component: do NOT rely on a single pass and do NOT judge your own one-shot output as good enough - that overconfidence is exactly what this pipeline corrects. For a task too large for one run it returns a slice roadmap; take ONE slice and delegate it here - do not build the whole thing yourself in one pass.",
+      "Delegate a hard engineering task (system design, non-trivial code, incident diagnosis) to a verification-centric reasoning pipeline: a task analyst elaborates the task into a brief first (it may PAUSE the run and return clarification questions or a draft brief for user review - relay them to the user verbatim and re-invoke with the answers / approved brief appended exactly as the result instructs), then a scout stage gathers read-only workspace context (file listing + targeted reads), then parallel candidates with execution evidence, generate->verify->revise loops with an independent grader, external claim-by-claim verification, and an evidence-disciplined final answer with a delivery plan. The pipeline produces a VERIFIED ANSWER plus apply steps, not workspace changes: the answer is saved to <runDir>/final.md (plan: handoff.md) and the result carries a NEXT STEP - execute the apply steps yourself when the user asked for implementation. Costs multiple model sub-calls, so do not use it for trivial questions. Use it for a BOUNDED, verifiable piece of work - a tricky function or algorithm, a contained change with a runnable check, a focused design or incident analysis - and do NOT one-shot such a piece yourself and trust it (that overconfidence is what this pipeline corrects). SLICE larger work first and delegate ONE bounded slice at a time; do NOT hand it a whole feature, a multi-file change, or 'build the app' - it generates one artifact per run, not a codebase. A task too big for one run returns a roadmap; build the glue yourself and delegate only the single self-contained verifiable pieces inside it - do NOT re-delegate a whole milestone. See the 'hifi-verified-slices' skill for how.",
     parameters: Type.Object({
       task: Type.String({
         description:

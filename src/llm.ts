@@ -8,13 +8,37 @@
 //  - every call persisted to the run store for auditability.
 
 import { completeSimple } from "@earendil-works/pi-ai";
-import type { AssistantMessage, SimpleStreamOptions } from "@earendil-works/pi-ai";
+import type { AssistantMessage, ModelThinkingLevel, SimpleStreamOptions } from "@earendil-works/pi-ai";
 import { Budget } from "./budget.ts";
 import type { RoleResolver } from "./roles.ts";
 import type { RunStore } from "./store.ts";
 import type { SubCallOutcome, SubCallRecord, SubCallRequest, UsageTotals } from "./types.ts";
 
 const RETRY_BACKOFF_MS = [1_000, 4_000, 10_000];
+
+// Severity-ordered reasoning levels (mirrors config THINKING_LEVELS). A reasoning
+// model can spend its ENTIRE token budget on thinking and return empty text with
+// stopReason "length"; the self-heal steps it DOWN this ladder toward "off" so the
+// answer budget is freed instead of repeating the identical empty call.
+const THINKING_LADDER: readonly ModelThinkingLevel[] = ["xhigh", "high", "medium", "low", "minimal", "off"];
+export function stepDownThinking(level: ModelThinkingLevel): ModelThinkingLevel {
+  const i = THINKING_LADDER.indexOf(level);
+  if (i < 0 || i >= THINKING_LADDER.length - 1) return "off";
+  return THINKING_LADDER[i + 1]!;
+}
+
+/** The next attempt's budget after an empty length-capped response: step thinking
+ * down one level and double the token ceiling, bounded by `cap`. Pure - this is
+ * the self-heal decision, unit-tested in eval/llm-selftest.ts. The thinking
+ * step-down is the real recovery lever (it frees the existing budget for the
+ * answer); the token bump is secondary and deliberately capped (see selfHealCap). */
+export function nextAttemptBudget(
+  curThinking: ModelThinkingLevel,
+  curMaxTokens: number,
+  cap: number,
+): { thinking: ModelThinkingLevel; maxTokens: number } {
+  return { thinking: stepDownThinking(curThinking), maxTokens: Math.min(curMaxTokens * 2, cap) };
+}
 
 export interface SubCallClientOptions {
   resolver: RoleResolver;
@@ -93,7 +117,6 @@ export class SubCallClient {
 
     const baseOptions: SimpleStreamOptions = {
       temperature: req.temperature ?? this.cfgTemperature(req),
-      maxTokens: Math.min(req.maxTokens ?? this.cfgMaxTokens(req), spec.maxTokens),
       timeoutMs: this.opts.timeoutMs,
       // completeSimple's own client retries stay off; retry policy lives here
       // so attempts are visible in the run record.
@@ -101,8 +124,19 @@ export class SubCallClient {
     };
     if (resolved.apiKey !== undefined) baseOptions.apiKey = resolved.apiKey;
     if (resolved.headers !== undefined) baseOptions.headers = resolved.headers;
-    const thinking = this.cfgThinking(req);
-    if (thinking !== "off") baseOptions.reasoning = thinking;
+    // Per-attempt reasoning budget. maxTokens is the TOTAL for thinking + answer;
+    // a reasoning model can burn all of it thinking and emit empty text (observed:
+    // glm-5.2 @ thinking=high hit the cap with 0 answer tokens, three attempts in a
+    // row). The self-heal in the loop below steps `curThinking` down and raises
+    // `curMaxTokens` toward `ceiling` after such an empty length-capped attempt.
+    let curMaxTokens = Math.min(req.maxTokens ?? this.cfgMaxTokens(req), spec.maxTokens);
+    let curThinking = this.cfgThinking(req);
+    // Bound self-heal escalation to 2x the initial budget, NOT the model max: the
+    // thinking step-down is the real recovery lever; doubling the token ceiling all
+    // the way to the model max just yields a final attempt too large to finish
+    // inside the per-attempt timeout, burning wall time for nothing (critic
+    // 2026-06-14). A bounded artifact that needs >2x is out of envelope (-> mega).
+    const selfHealCap = Math.min(curMaxTokens * 2, spec.maxTokens);
 
     let lastError = "";
     let response: AssistantMessage | null = null;
@@ -131,6 +165,13 @@ export class SubCallClient {
       const attemptTimeoutMs = Math.round(this.opts.timeoutMs * (1 + 0.5 * (attempts - 1)));
       const timeoutSignal = AbortSignal.timeout(attemptTimeoutMs);
       const signal = this.opts.signal ? AbortSignal.any([this.opts.signal, timeoutSignal]) : timeoutSignal;
+      const attemptOptions: SimpleStreamOptions = {
+        ...baseOptions,
+        maxTokens: curMaxTokens,
+        signal,
+        timeoutMs: attemptTimeoutMs,
+      };
+      if (curThinking !== "off") attemptOptions.reasoning = curThinking;
       try {
         const message = await completeSimple(
           spec,
@@ -144,7 +185,7 @@ export class SubCallClient {
               },
             ],
           },
-          { ...baseOptions, signal, timeoutMs: attemptTimeoutMs },
+          attemptOptions,
         );
         accumulate(message);
         // completeSimple reports failures in-band via stopReason/errorMessage.
@@ -161,6 +202,23 @@ export class SubCallClient {
           if (text.length === 0) {
             response = message;
             lastError = "empty response text";
+            // SELF-HEAL: an empty reply means the model emitted no answer text -
+            // usually because reasoning consumed the whole token budget (stopReason
+            // "length"), but some providers report a thinking-cap as an empty
+            // "stop". Either way, repeating the identical call repeats the failure,
+            // so for the NEXT attempt step thinking DOWN (frees the answer budget)
+            // and raise the ceiling. Stepping thinking down is always a safe
+            // recovery for an empty response, regardless of stopReason. (A NON-empty
+            // length stop is real truncation, handled in the success branch below.)
+            if (attempts < maxAttempts) {
+              const prev = `thinking=${curThinking}, maxTokens=${curMaxTokens}`;
+              const next = nextAttemptBudget(curThinking, curMaxTokens, selfHealCap);
+              curThinking = next.thinking;
+              curMaxTokens = next.maxTokens;
+              this.opts.onNote?.(
+                `sub-call ${req.label}: empty output (${message.stopReason}; reasoning likely ate the budget: ${prev}) - next attempt thinking=${curThinking}, maxTokens=${curMaxTokens}`,
+              );
+            }
           } else {
             response = message;
             lastError = "";
