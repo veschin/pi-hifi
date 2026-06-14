@@ -20,8 +20,16 @@ See also: [20_pipeline.md](20_pipeline.md) · [40_extension.md](40_extension.md)
   [90_lessons.md](90_lessons.md)).
 - **Usage accounting is cumulative across attempts** - every retry's tokens
   hit the budget, not just the final response's.
-- **Empty response text counts as a failure** (retryable), `stopReason ===
-  "length"` does not - truncation is surfaced by the eval analyzer instead.
+- **Empty response text counts as a failure** (retryable) and SELF-HEALS
+  (2026-06-14): the next attempt steps the role's reasoning level DOWN one rung
+  (`THINKING_LADDER`) and doubles the token ceiling, capped at 2× the INITIAL
+  budget (not the model max). A reasoning model can spend the whole `maxTokens`
+  thinking and emit no answer text, so an identical retry just repeats the
+  failure; stepping thinking down frees the answer budget. Pure helpers
+  `stepDownThinking` / `nextAttemptBudget` (`src/llm.ts`), unit-tested in
+  `eval/llm-selftest.ts`. (Generator `maxTokens` is 32768 for the same reason.)
+- **A NON-empty `stopReason === "length"`** is real truncation - surfaced via an
+  `onNote` ("output TRUNCATED at maxTokens") AND by the eval analyzer.
 - Every call (including failures) is appended to `subcalls.jsonl` with full
   prompts, response, usage, timing, retries.
 

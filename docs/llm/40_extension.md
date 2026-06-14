@@ -49,6 +49,15 @@ See also: [30_subcall_infra.md](30_subcall_infra.md) · [10_scope.md](10_scope.m
   from the TUI** (ctx.signal is undefined outside turns; backlog).
 - **`/apodex-config`**: prints effective config (incl. context/delivery
   blocks and all six role bindings) + session model.
+- **Bundled skill `hifi-verified-slices`** (2026-06-14): contributed via
+  `pi.on("resources_discover", () => ({ skillPaths: [<moduleDir>/skills/hifi-verified-slices/SKILL.md] }))`,
+  so it loads with the extension under any install path (symlink / package / -e).
+  It teaches the host model hifi's ENVELOPE - delegate ONE self-contained
+  verifiable artifact at a time, build glue/scaffolds/visuals yourself, and on a
+  mega roadmap extract the testable atom rather than re-delegating the milestone.
+  REPLACED the earlier per-turn `before_agent_start` delegation directive
+  (removed): that injected into every turn's system prompt; a contextual skill is
+  cleaner, has no opt-out flag to manage, and can carry use-cases.
 
 ## Integration facts (do not re-derive; verified in NOTES.md)
 
