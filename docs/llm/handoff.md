@@ -3,7 +3,74 @@ id: handoff
 kind: guide
 ---
 
-# Handoff - pi-hifi: make the composer the working default (PRODUCTION-READY)
+# Handoff - pi-hifi
+
+## LATEST SESSION (2026-06-14): two-model usability fix - SHIPPED to main (3840645)
+
+The recurring complaint - "the model won't use hifi well" - had TWO opposite
+real-run causes, now both fixed, verified e2e on the real pi, merged to main
+(PR #2), and live on the PC (the `~/.pi/agent/extensions/pi-hifi` symlink serves
+this working tree; already-running sessions need a restart to reload the code).
+
+**hifi's ENVELOPE (the load-bearing mental model):** hifi verifies ONE
+self-contained artifact - a single algorithm/function/module deliverable as one
+code block + one runnable self-test. It is NOT a multi-file scaffold builder and
+NOT a visual/browser verifier. Glue, scaffolding, UI, and visuals are the host
+model's job; hifi verifies the testable atoms inside them.
+
+**The two failures (both observed in ~/ai/game2 + game3 runs):**
+1. glm-5.2 (thinking=high) delegated a monolith -> the `generator` role
+   (maxTokens 16384) spent the whole budget reasoning and returned EMPTY
+   (stopReason length); the 2 retries repeated the identical call -> 3 empty
+   attempts -> non-answer after ~14 min.
+2. deepseek-v4-pro delegated a multi-file scaffold slice -> triage re-classified
+   the approved brief as mega -> sub-roadmap -> the model recursed and bailed.
+   The roadmap message told it to re-delegate the milestone (the recursion trap).
+
+**What shipped (commit 2a027ba):**
+- `src/llm.ts` SubCallClient SELF-HEAL: an EMPTY reply (any stopReason) makes the
+  next attempt step thinking DOWN one level + raise the token ceiling (capped at
+  2x the initial budget, not the model max). Pure helpers `stepDownThinking` /
+  `nextAttemptBudget`, unit-tested in `eval/llm-selftest.ts`. The thinking
+  step-down is the real lever; the token bump is secondary and bounded.
+- `src/config.ts`: generator `maxTokens` 16384 -> 32768.
+- `src/triage.ts`: scale reworded - bounded = ONE testable artifact; mega =
+  multiple independent features OR glue/scaffold OR a browser/integration-only
+  check. Judged by INDEPENDENT testable deliverables, NOT file count.
+- `index.ts`: the mega-roadmap NEXT STEP now REDIRECTS (build the glue yourself,
+  delegate only the single verifiable atoms inside a milestone, never re-delegate
+  a whole milestone) - this breaks the recursion. Tool description aligned.
+- `skills/hifi-verified-slices/SKILL.md` (NEW) + `resources_discover` wiring:
+  REPLACES the per-turn `before_agent_start` delegation directive (removed). The
+  skill teaches the envelope; it loads with the extension via any install path.
+
+**Verified:** tsc clean; free suite green (8 selftests + selfcheck + validate.sh);
+opus critic x2 (no blockers; both SHOULD-FIX applied). E2E on the real pi:
+"build a 3D Factorio MVP" -> mega -> roadmap; the exact deepseek scaffold slice
+-> mega (was bounded->recurse); "mulberry32 + a determinism self-test" -> bounded
+-> gen non-empty (5233 chars, 0 retries) -> self-test ran in sandbox exit 0 ->
+final.md = a real verified PRNG, composer hifi=true.
+
+**Open / deferred (descending value):**
+1. LIVE-verify the self-heal actually FIRING on a real glm-5.2 empty-at-length
+   (the e2e bounded run never went empty, so self-heal stayed dormant; it is
+   unit-tested + critic-verified, and triage now keeps monoliths out of gen, so
+   the trigger should be rare). Not yet OBSERVED recovering live.
+2. MULTI-FILE candidate support: the gen contract is one `solution` + one
+   `selftest` block, so a coherent multi-file deliverable cannot be one hifi run.
+   This is the real envelope ceiling. Deferred (large change; the sandbox already
+   does `files: Record<string,string>`, so gen-prompt + parsing + run
+   materialization could extend it). Decide with the user before building.
+3. The visual/browser ORACLE limit is inherent (the sandbox runs node/tsx, not a
+   browser); documented in the skill as "build visuals yourself".
+4. BENCHMARK composer vs linear vs single-pass (the eval pins composer OFF for
+   comparability - do not disturb that pin).
+
+See `devlog/06_devlog_two_model_usability_fix.md` for the full diagnosis.
+
+---
+
+## PRIOR MILESTONE: composer is the working default (PRODUCTION-READY) - MET
 
 ## THE ONLY DEFINITION OF DONE - STATUS: MET (2026-06-14)
 
