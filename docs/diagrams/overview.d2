@@ -1,0 +1,19 @@
+direction: down
+you_user: You
+dag_triage: Triage
+dag_brief: Brief
+dag_context: Context
+dag_classify: Classify
+dag_admit: Admit
+dag_decompose: Decompose
+dag_composer: Composer
+mf_out: "Verified\nanswer"
+you_user -> dag_triage
+dag_triage -> dag_brief
+dag_brief -> dag_context
+dag_context -> dag_classify
+dag_classify -> dag_admit
+dag_admit -> dag_decompose
+dag_decompose -> dag_composer
+dag_composer -> mf_out
+mf_out -> you_user: Apply

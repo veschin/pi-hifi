@@ -23,6 +23,22 @@ import type { HifiResult, DeliveryPlan, TaskMode } from "./src/types.ts";
 
 const MODE_VALUES = ["auto", "design", "code", "incident", "general"] as const;
 
+// Standing delegation directive injected into each turn's system prompt (see the
+// before_agent_start hook in the default export). The host model's overconfidence
+// in its own single pass is the failure this pipeline corrects; left to itself the
+// model under-uses the tool and one-shots hard tasks. This nudges it to delegate.
+const HIFI_USAGE_DIRECTIVE = [
+  "## pi-hifi delegation policy",
+  "When a task is non-trivial code, a system design, an incident diagnosis, or is",
+  "otherwise correctness-critical, large, or multi-component, delegate it to the",
+  "`hifi` tool instead of answering in a single pass. Do NOT judge your own",
+  "single-pass output as sufficient - that overconfidence is the failure hifi",
+  "prevents. If hifi returns a mega roadmap, do NOT build the whole thing yourself:",
+  "re-invoke hifi on milestone 1 as a self-contained task and continue slice by",
+  "slice. Do NOT dismiss hifi's steps as ceremony. Build scaffolding and glue",
+  "yourself; delegate the hard, verifiable pieces to hifi.",
+].join("\n");
+
 function fmtTokens(n: number): string {
   return n >= 10_000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
@@ -160,7 +176,7 @@ function composeClarification(result: HifiResult): string {
     return [
       `pi-hifi classified this as a LARGE (mega) task (run ${result.runId}) - it is not solved in one pass. Slice roadmap:`,
       milestones,
-      `NEXT STEP: present this roadmap to the user and ask which milestone to tackle first (or to narrow the task). Then invoke the hifi tool again on that ONE slice as a self-contained task - it runs the full verification pipeline on the bounded slice. Do not attempt the whole system in one run.`,
+      `NEXT STEP: present this roadmap to the user, then take the FIRST milestone (or ask the user which) and invoke the hifi tool again on that ONE slice as a self-contained task - it runs the full verification pipeline on the bounded slice. Do NOT build the whole system yourself in one pass, and do NOT dismiss this roadmap as ceremony: one-shot construction of a task this size is exactly the failure this pipeline prevents. Own the scaffolding and glue yourself; delegate each hard slice here.`,
     ].join("\n\n");
   }
   return [
@@ -234,11 +250,21 @@ async function execute(
 }
 
 export default function (pi: ExtensionAPI) {
+  // Self-advocating: append the delegation directive to each turn's system prompt
+  // so the model reaches for hifi on hard tasks instead of one-shotting them.
+  // Fires once per user turn, append-only (cannot break a turn); opt out with
+  // HIFI_DIRECTIVE=0.
+  if (process.env.HIFI_DIRECTIVE !== "0") {
+    pi.on("before_agent_start", (event) => {
+      if (typeof event.systemPrompt !== "string") return undefined;
+      return { systemPrompt: `${event.systemPrompt}\n\n${HIFI_USAGE_DIRECTIVE}` };
+    });
+  }
   pi.registerTool({
     name: "hifi",
     label: "Hifi",
     description:
-      "Delegate a hard engineering task (system design, non-trivial code, incident diagnosis) to a verification-centric reasoning pipeline: a task analyst elaborates the task into a brief first (it may PAUSE the run and return clarification questions or a draft brief for user review - relay them to the user verbatim and re-invoke with the answers / approved brief appended exactly as the result instructs), then a scout stage gathers read-only workspace context (file listing + targeted reads), then parallel candidates with execution evidence, generate->verify->revise loops with an independent grader, external claim-by-claim verification, and an evidence-disciplined final answer with a delivery plan. The pipeline produces a VERIFIED ANSWER plus apply steps, not workspace changes: the answer is saved to <runDir>/final.md (plan: handoff.md) and the result carries a NEXT STEP - execute the apply steps yourself when the user asked for implementation. Costs multiple model sub-calls; use for tasks where single-pass answers are unreliable, not for trivial questions.",
+      "Delegate a hard engineering task (system design, non-trivial code, incident diagnosis) to a verification-centric reasoning pipeline: a task analyst elaborates the task into a brief first (it may PAUSE the run and return clarification questions or a draft brief for user review - relay them to the user verbatim and re-invoke with the answers / approved brief appended exactly as the result instructs), then a scout stage gathers read-only workspace context (file listing + targeted reads), then parallel candidates with execution evidence, generate->verify->revise loops with an independent grader, external claim-by-claim verification, and an evidence-disciplined final answer with a delivery plan. The pipeline produces a VERIFIED ANSWER plus apply steps, not workspace changes: the answer is saved to <runDir>/final.md (plan: handoff.md) and the result carries a NEXT STEP - execute the apply steps yourself when the user asked for implementation. Costs multiple model sub-calls, so do not use it for trivial questions. Otherwise DELEGATE here whenever the task is non-trivial code, a system design, an incident diagnosis, or is correctness-critical or multi-component: do NOT rely on a single pass and do NOT judge your own one-shot output as good enough - that overconfidence is exactly what this pipeline corrects. For a task too large for one run it returns a slice roadmap; take ONE slice and delegate it here - do not build the whole thing yourself in one pass.",
     parameters: Type.Object({
       task: Type.String({
         description:

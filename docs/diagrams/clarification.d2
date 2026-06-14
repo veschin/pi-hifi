@@ -1,0 +1,10 @@
+direction: down
+you_user: You
+dag_triage: Triage
+mf_road: Roadmap
+mf_quest: Questions
+you_user -> dag_triage: task
+dag_triage -> mf_road: mega
+dag_triage -> mf_quest: unclear
+mf_road -> you_user: slice
+mf_quest -> you_user: answer

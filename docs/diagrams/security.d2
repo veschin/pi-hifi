@@ -1,0 +1,12 @@
+direction: right
+ops_detect: "Detect\ntier"
+ops_rootless: Rootless
+ops_degraded: Degraded
+dag_run: "Run\nsandboxed"
+dag_off: "Exec\noff"
+dag_bare: "Bare\nhost"
+ops_detect -> ops_rootless
+ops_detect -> ops_degraded
+ops_rootless -> dag_run
+ops_degraded -> dag_off: default
+ops_degraded -> dag_bare: "opt\nin"

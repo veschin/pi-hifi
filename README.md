@@ -63,6 +63,8 @@ result in.
 > A "mega" task keeps returning a roadmap rather than a solution **by design**.
 > Slice it, or hand the build to the agent and delegate the bounded sub-problems.
 
+<p align="center"><img src="docs/diagrams/delegation.png" alt="delegation" width="760"></p>
+
 ---
 
 ## Install
@@ -113,14 +115,26 @@ then re-invoke with the answer appended under a documented heading.
 | Ambiguous task | Numbered **brief questions** | Re-invoke with the original task + a `# Clarification answers` section |
 | Draft brief for review | A proposed **brief** | Re-invoke with the original task + an `# Approved brief` section |
 
+<p align="center"><img src="docs/diagrams/clarification.png" alt="clarification pauses" width="420"></p>
+
 State lives entirely in the chat text - the paused run is closed; the re-invoke
 is a fresh run that reads your appended section.
+
+### Getting the agent to delegate
+
+Models tend to over-trust their own single pass and under-use the tool. To
+counter that, the extension appends a short **delegation directive** to each
+turn's system prompt: delegate hard, large, or correctness-critical tasks to
+`hifi`, and on a mega roadmap take one slice rather than building it all yourself.
+Opt out with `HIFI_DIRECTIVE=0`.
 
 ---
 
 ## How it works
 
 One task flows through shared front stages, then the composer:
+
+<p align="center"><img src="docs/diagrams/overview.png" alt="pipeline overview" width="240"></p>
 
 ```text
 triage      classify the task (type, scale, needs-input?)  -> mega: stop, return roadmap
@@ -147,9 +161,16 @@ only chooses how many candidates to compare and whether to add an audit.
 | `synthesize` | strong | the final answer | non-empty; the winner's solution block is preserved verbatim |
 | `decompose` | strong | the work-graph | drawn only from the catalog; on doubt it orders *more* work, never less |
 
+Every gate reads the **observation** channel (what the system did), never the
+model's **claim** (what it said):
+
+<p align="center"><img src="docs/diagrams/channels.png" alt="observation vs claim channel" width="720"></p>
+
 ### Graph shapes
 
 The default graph is deterministic and validated before it runs:
+
+<p align="center"><img src="docs/diagrams/composer-graph.png" alt="composer work-graph" width="820"></p>
 
 ```text
 code, N >= 2:  gen ×N  ->  run ×N  ->  judge  ->  [audit]  ->  synthesize
@@ -277,6 +298,8 @@ present, or you explicitly opt into bare-host execution.
 
 `detectSandbox()` probes the host at startup and picks a tier; `execAdmission`
 then maps tier + opt-in to an outcome:
+
+<p align="center"><img src="docs/diagrams/security.png" alt="sandbox admission" width="680"></p>
 
 | Detected tier | `allowUnsandboxed` | Outcome | Behavior |
 |---|---|---|---|

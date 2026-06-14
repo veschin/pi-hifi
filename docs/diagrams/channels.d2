@@ -1,0 +1,11 @@
+direction: right
+dag_out: Output
+db_obs: Observation
+ex_claim: Claim
+ops_gate: Gate
+mf_v: "Pass\nor flag"
+dag_out -> db_obs: "load\nbearing"
+dag_out -> ex_claim: ignored
+db_obs -> ops_gate: read
+ex_claim -> ops_gate: "never\nread" {style.stroke-dash: 4}
+ops_gate -> mf_v
